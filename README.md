@@ -8,7 +8,7 @@ Also, it's entirely non-blocking. The publishing occurs from a separate thread s
 
 Normally, if you're careful you can avoid publish blocking loop for long periods of time, but it still regularly blocks for 1-2 seconds on the Electron. Using this library eliminates all blocking and publishQueue.publish returns immediately, always.
 
-And it uses retained memory, so the events are saved you reboot or go into sleep mode. They'll be transmitted when you finally connect to the cloud again.
+And it uses retained memory, so the events are saved when you reboot or go into sleep mode. They'll be transmitted when you finally connect to the cloud again.
 
 There's one important caveat that bothers me: I can't get WITH\_ACK mode to work. It works fine from the main thread, but when you use WITH\_ACK from a worker thread Particle.publish immediately returns false. This code would be even better in WITH\_ACK mode, so this is annoying. But it's still useful for the other reasons listed above.
 
