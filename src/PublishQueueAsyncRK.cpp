@@ -61,7 +61,7 @@ PublishQueueAsync::~PublishQueueAsync() {
 
 }
 
-bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl, PublishFlags flags1, PublishFlags flags2) {
+bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl, PublishFlag flags1, PublishFlag flags2) {
 
 	if (data == NULL) {
 		data = "";
@@ -73,7 +73,7 @@ bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl
 		size += 4 - (size % 4);
 	}
 
-	log.info("queueing eventName=%s data=%s ttl=%d flags1=%d flags2=%d size=%d", eventName, data, ttl, flags1.value(), flags2.value(), size);
+	log.info("queueing eventName=%s data=%s ttl=%d flags1=%d flags2=%d size=%d", eventName, data, ttl, flags1.flag(), flags2.flag(), size);
 
 	if  (size > (retainedBufferSize - sizeof(RetainedBufHeader))) {
 		// Special case: event is larger than the retained buffer. Rather than throw out all events
@@ -88,7 +88,7 @@ bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl
 				// There is room to fit this
 				EventData *eventData = reinterpret_cast<EventData *>(nextFree);
 				eventData->ttl = ttl;
-				eventData->flags = flags1.value() | flags2.value();
+				eventData->flags = flags1.flag() | flags2.flag();
 
 				char *cp = reinterpret_cast<char *>(nextFree);
 				cp += sizeof(EventData);
@@ -229,14 +229,12 @@ void PublishQueueAsync::checkQueueState() {
 		const char *eventData = eventName;
 		eventData += strlen(eventData) + 1;
 
-		PublishFlags flags(PublishFlag(data->flags));
-
 		// For reasons that are not entirely obvious to me, you can't use WITH_ACK. If you specify it
 		// on the Photon or Electron, Particle.publish will immediately return false. This only happens
 		// with this code running in a separate thread. It works fine from the main thread.
 
-		log.info("publishing %s %s ttl=%d flags=%x", eventName, eventData, data->ttl, flags.value());
-		bool bResult = Particle.publish(eventName, eventData, data->ttl, flags);
+		log.info("publishing %s %s ttl=%d flags=%x", eventName, eventData, data->ttl, data->flags);
+		bool bResult = Particle.publish(eventName, eventData, data->ttl, (PublishFlag) data->flags);
 		if (bResult) {
 			// Successfully published
 			log.info("published successfully");

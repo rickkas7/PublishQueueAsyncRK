@@ -3,6 +3,10 @@
 
 #include "Particle.h"
 
+// This is a fork of the regular library to support 0.6.x, which does not support PublishFlags. This
+// makes the code more cumbersome, so this is implemented as a fork. It won't be merged back into the
+// master branch.
+
 /**
  * @brief Library for asynchronous Particle.publish on the Particle Photon, Electron, and other devices.
  *
@@ -50,8 +54,12 @@ public:
 	 * This function almost always returns true. If you queue more events than fit in the buffer the
 	 * oldest (sometimes second oldest) is discarded.
 	 */
-	inline 	bool publish(const char *eventName, PublishFlags flags1, PublishFlags flags2 = PublishFlags()) {
-		return publish(eventName, "", 60, flags1, flags2);
+	inline 	bool publish(const char *eventName, PublishFlag flags1 = PUBLIC) {
+		return publish(eventName, "", 60, flags1.flag(), 0);
+	}
+
+	inline 	bool publish(const char *eventName, PublishFlag flags1, PublishFlag flags2) {
+		return publish(eventName, "", 60, flags1.flag(), flags2.flag());
 	}
 
 	/**
@@ -71,8 +79,12 @@ public:
 	 * This function almost always returns true. If you queue more events than fit in the buffer the
 	 * oldest (sometimes second oldest) is discarded.
 	 */
-	inline 	bool publish(const char *eventName, const char *data, PublishFlags flags1, PublishFlags flags2 = PublishFlags()) {
-		return publish(eventName, data, 60, flags1, flags2);
+	inline 	bool publish(const char *eventName, const char *data, PublishFlag flags1 = PUBLIC) {
+		return publish(eventName, data, 60, flags1.flag(), 0);
+	}
+
+	inline 	bool publish(const char *eventName, const char *data, PublishFlag flags1, PublishFlag flags2) {
+		return publish(eventName, data, 60, flags1.flag(), flags2.flag());
 	}
 
 	/**
@@ -96,7 +108,11 @@ public:
 	 * This function almost always returns true. If you queue more events than fit in the buffer the
 	 * oldest (sometimes second oldest) is discarded.
 	 */
-	bool publish(const char *eventName, const char *data, int ttl, PublishFlags flags1, PublishFlags flags2 = PublishFlags());
+	inline bool publish(const char *eventName, const char *data, int ttl, PublishFlag flags1) {
+		return publish(eventName, data, 60, flags1.flag(), 0);
+	}
+
+	bool publish(const char *eventName, const char *data, int ttl, PublishFlag flags1, PublishFlag flags2);
 
 
 	/**
