@@ -21,8 +21,7 @@ typedef struct {
 static Logger log("app.pubq");
 
 PublishQueueAsync::PublishQueueAsync(uint8_t *retainedBuffer, uint16_t retainedBufferSize) :
-		retainedBuffer(retainedBuffer), retainedBufferSize(retainedBufferSize),
-		thread("PublishQueueAsync", threadFunctionStatic, this, OS_THREAD_PRIORITY_DEFAULT, 2048) {
+		retainedBuffer(retainedBuffer), retainedBufferSize(retainedBufferSize) {
 
 	// Initialize the retained buffer
 	bool initBuffer = false;
@@ -61,7 +60,17 @@ PublishQueueAsync::~PublishQueueAsync() {
 
 }
 
+void PublishQueueAsync::setup() {
+	haveSetup = true;
+
+	thread = new Thread("PublishQueueAsync", threadFunctionStatic, this, OS_THREAD_PRIORITY_DEFAULT, 2048);
+}
+
 bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl, PublishFlags flags1, PublishFlags flags2) {
+
+	if (!haveSetup) {
+		setup();
+	}
 
 	if (data == NULL) {
 		data = "";

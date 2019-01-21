@@ -16,7 +16,7 @@ int counter = 0;
 
 void setup() {
 	Serial.begin();
-
+	publishQueue.setup();
 }
 
 void loop() {

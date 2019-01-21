@@ -28,6 +28,7 @@ void setup() {
 	Serial.begin();
 	System.on(button_click, buttonHandler);
 	timer.start();
+	publishQueue.setup();
 }
 
 void loop() {

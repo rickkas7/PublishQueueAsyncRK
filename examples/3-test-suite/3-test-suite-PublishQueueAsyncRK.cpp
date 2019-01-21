@@ -32,6 +32,7 @@ void publishPaddedCounter(int size);
 void setup() {
 	Serial.begin();
 	Particle.function("test", testHandler);
+	publishQueue.setup();
 }
 
 void loop() {

@@ -36,6 +36,14 @@ public:
 	virtual ~PublishQueueAsync();
 
 	/**
+	 * @brief Start the thread. You should call this from setup.
+	 *
+	 * Since version 1.0.1 did not have the setup method, if you don't setup() it will be set up when you first
+	 * publish, but starting the thread earlier is suggested.
+	 */
+	void setup();
+
+	/**
 	 * @brief Overload for publishing an event
 	 *
 	 * @param eventName The name of the event (63 character maximum).
@@ -130,7 +138,7 @@ private:
 
 	uint8_t *retainedBuffer;
 	uint16_t retainedBufferSize;
-	Thread thread;
+	Thread *thread = NULL;
 	uint8_t *nextFree;
 
 	unsigned long failureRetryMs = 30000;
@@ -140,6 +148,7 @@ private:
 	unsigned long stateTime = 0;
 	unsigned long lastPublish = 0;
 	bool isSending = false;
+	bool haveSetup = false;
 };
 
 
