@@ -13,8 +13,14 @@ enum {
 	TEST_IDLE = 0, // Don't do anything
 	TEST_COUNTER, // 1 publish, period milliseconds is param0
 	TEST_PUBLISH_FAST, // 2 publish events as fast as possible, number is param0, optional size in param2
-	TEST_PUBLISH_OFFLINE // 3 go offline, publish some events, then go back online, number is param0, optional size in param2
+	TEST_PUBLISH_OFFLINE, // 3 go offline, publish some events, then go back online, number is param0, optional size in param2
+	TEST_COUNTER_WITH_ACK // 4 publish, period milliseconds is param0 but use WITH_ACK mode
 };
+
+// Example:
+// particle call electron1 test "4,30000"
+// Replace electron1 with the name of your device
+// "4,30000" is test 4, with a period of 30000 milliseconds or 30 seconds
 
 const size_t MAX_PARAM = 4;
 const unsigned long PUBLISH_PERIOD_MS = 30000;
@@ -26,7 +32,7 @@ String stringParam[MAX_PARAM];
 size_t numParam;
 
 int testHandler(String cmd);
-void publishCounter();
+void publishCounter(bool withAck);
 void publishPaddedCounter(int size);
 
 void setup() {
@@ -37,7 +43,7 @@ void setup() {
 
 void loop() {
 
-	if (testNum == TEST_COUNTER) {
+	if (testNum == TEST_COUNTER || testNum == TEST_COUNTER_WITH_ACK) {
 		int publishPeriod = intParam[0];
 		if (publishPeriod < 1) {
 			publishPeriod = 15000;
@@ -47,7 +53,7 @@ void loop() {
 			lastPublish = millis();
 
 			Log.info("TEST_COUNTER period=%d", publishPeriod);
-			publishCounter();
+			publishCounter(testNum == TEST_COUNTER_WITH_ACK);
 		}
 	}
 	else
@@ -85,12 +91,12 @@ void loop() {
 	}
 }
 
-void publishCounter() {
+void publishCounter(bool withAck) {
 	Log.info("publishing counter=%d", counter);
 
 	char buf[32];
 	snprintf(buf, sizeof(buf), "%d", counter++);
-	publishQueue.publish("testEvent", buf, 50, PRIVATE);
+	publishQueue.publish("testEvent", buf, 50, (withAck ? (PRIVATE | WITH_ACK) : PRIVATE));
 }
 
 void publishPaddedCounter(int size) {
@@ -114,7 +120,7 @@ void publishPaddedCounter(int size) {
 		buf[size] = 0;
 	}
 
-	publishQueue.publish("testEvent", buf, PRIVATE);
+	publishQueue.publish("testEvent", buf, PRIVATE | WITH_ACK);
 }
 
 

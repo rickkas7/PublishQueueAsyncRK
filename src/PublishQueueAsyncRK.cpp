@@ -245,7 +245,15 @@ void PublishQueueAsync::checkQueueState() {
 		// with this code running in a separate thread. It works fine from the main thread.
 
 		log.info("publishing %s %s ttl=%d flags=%x", eventName, eventData, data->ttl, flags.value());
-		bool bResult = Particle.publish(eventName, eventData, data->ttl, flags);
+
+		auto request = Particle.publish(eventName, eventData, data->ttl, flags);
+
+		// Use this technique of looping because the future will not be handled properly
+		// when waiting in a worker thread like this.
+		while(!request.isDone()) {
+			delay(1);
+		}
+		bool bResult = request.isSucceeded();
 		if (bResult) {
 			// Successfully published
 			log.info("published successfully");

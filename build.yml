@@ -1,0 +1,13 @@
+- build: examples/1-periodic
+  photon: [0.6.3, 0.7.0, 1.0.0]
+  p1: [1.0.0]
+  electron: [0.6.4, 1.0.0]
+  argon: [0.9.0]
+  boron: [0.8.0-rc.27, 0.9.0]
+  xenon: [0.9.0]
+- build: examples/2-button-and-timer
+  electron: [1.0.0]
+- build: examples/3-test-suite
+  electron: [1.0.0]
+
+  

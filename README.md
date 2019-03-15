@@ -10,7 +10,7 @@ Normally, if you're careful you can avoid publish blocking loop for long periods
 
 And it uses retained memory, so the events are saved when you reboot or go into sleep mode. They'll be transmitted when you finally connect to the cloud again.
 
-There's one important caveat that bothers me: I can't get WITH\_ACK mode to work. It works fine from the main thread, but when you use WITH\_ACK from a worker thread Particle.publish immediately returns false. This code would be even better in WITH\_ACK mode, so this is annoying. But it's still useful for the other reasons listed above.
+Version 0.0.3 of this library and newer support WITH\_ACK mode!
 
 Also note: This library requires system firmware 0.7.0 or later. The publish flags were different in 0.6.x, and this library doesn't support the old method. Since it uses threads, it does not work on the Spark Core.
 
@@ -31,9 +31,9 @@ Note that even when cloud connected, all events are copied to this buffer first 
 Then, when you want to send, use one of these variants instead of the Particle.publish version:
 
 ```
-		publishQueue.publish("testEvent", PRIVATE);
-		publishQueue.publish("testEvent", "x", PRIVATE);
-		publishQueue.publish("testEvent", "x", 60, PRIVATE);
+		publishQueue.publish("testEvent", PRIVATE, WITH_ACK);
+		publishQueue.publish("testEvent", "x", PRIVATE, WITH_ACK);
+		publishQueue.publish("testEvent", "x", 60, PRIVATE, WITH_ACK);
 ```
 
 Note that like system 0.8.0 and later, you must specify PUBLIC or PRIVATE.
@@ -45,7 +45,9 @@ You can also use NO\_ACK, if you'd like:
 		publishQueue.publish("testEvent", "x", PRIVATE | NO_ACK);
 ```
 
-But you cannot use WITH\_ACK. This is unfortunate, as it would be really useful to add this flag. However, on both the Photon and Electron with 0.7.0 if I specify WITH\_ACK the publish fails and returns false immediately. This only happens when doing a Particle.publish from the worker thread. I think it has something to do with the particle::Future.
+I recommend using WITH\_ACK. The worker thread will wait for the ACK from the cloud before dequeing the event. This allows for several tries to send the event, and if it does not work, the send will be tried again in 30 seconds if cloud-connected. New events can still be queued during this time.
+
+Since the queue is stored in retained memory, you can even reset the device and the queue will be transmitted on boot.
 
 You can call the publishQueue.publish method from any thread, including the main loop thread, software timer, or your own worker thread. You cannot call it from an interrupt service routine (ISR) such as from attachInterrupt or a hardware timer (SparkIntervalTimer), however. 
 
@@ -69,9 +71,9 @@ There are three examples:
 - 2-button-and-timer
 - 3-test-suite
 
-The first one publishes every 30 seconds from loop using a millis() check.
+The first one publishes every 30 seconds from loop using a millis() check. It uses WITH_ACK.
 
-The second one publishes every 30 seconds from a software timer. It also publishes when you press the MODE button.
+The second one publishes every 30 seconds from a software timer. It also publishes when you press the MODE button. It uses WITH_ACK.
 
 The third is described in the next section.
 
@@ -82,16 +84,17 @@ The example 03-test-suite makes it easy to test some of the features. Flag the c
 The first parameter is the test number:
 
 - 0 idle
-- 1 publish periodically
+- 1 publish periodically 
 - 2 publish rapidly
 - 3 disconnect from the cloud, publish rapidly, then reconnect
+- 4 publish periodically using WITH\_ACK
 
 There may be additional parameters based on the test number, as well.
 
 --
 
 ```
-particle call electron3 test "1,10"
+particle call electron3 test "1,10000"
 ```
 
 Publish a sequential event every 10 seconds.
@@ -120,4 +123,9 @@ particle call electron3 test "3,5,64"
 
 Disconnect from the cloud, publish 5 events of 64 bytes each, then go back online.
 
+## Version History
+
+### 0.0.3
+
+- Added support for WITH\_ACK mode
 

@@ -1,0 +1,19 @@
+{
+    "name": "PublishQueueAsyncRK",
+    "version": "0.0.1",
+    "description": "Travis build script",
+    "private": true,
+    "scripts": {
+        "test": "node node_modules/@rickkas7/particle-builder/particle-builder.js ."
+    },
+    "author": "rickkas7@github.com",
+    "contributors": [
+    ],
+    "license": "Apache Version 2.0",
+    "dependencies": {
+        "@rickkas7/particle-builder": "^0.0.4"
+    },
+    "engines": {
+        "node": ">=4.3.2"
+    }
+}

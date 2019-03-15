@@ -28,7 +28,7 @@ void loop() {
 
 		char buf[32];
 		snprintf(buf, sizeof(buf), "%d", counter++);
-		publishQueue.publish("testEvent", buf, 60, PRIVATE);
+		publishQueue.publish("testEvent", buf, 60, PRIVATE, WITH_ACK);
 	}
 }
 
