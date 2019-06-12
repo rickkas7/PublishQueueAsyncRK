@@ -92,6 +92,8 @@ bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl
 
 	while(true) {
 		SINGLE_THREADED_BLOCK() {
+			// Important: Do not log.info, etc. within a SINGLE_THREADED_BLOCK as it can cause
+			// deadlock if another thread already has the log mutex!
 			uint8_t *end = &retainedBuffer[retainedBufferSize];
 			if ((size_t)(end - nextFree) >= size) {
 				// There is room to fit this
@@ -111,7 +113,6 @@ bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl
 
 				RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
 				hdr->numEvents++;
-				// log.info("numEvents=%u", hdr->numEvents);
 				return true;
 			}
 
@@ -166,7 +167,9 @@ uint8_t *PublishQueueAsync::skipEvent(uint8_t *start) {
 
 
 bool PublishQueueAsync::discardOldEvent(bool secondEvent) {
-	// log.info("discardOldEvent secondEvent=%d", secondEvent);
+	// Important: Do not log.info, etc. within this function as it's called within a SINGLE_THREADED_BLOCK
+	// which can cause deadlock if another thread already has the log mutex!
+
 	SINGLE_THREADED_BLOCK() {
 		RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
 		uint8_t *start = &retainedBuffer[sizeof(RetainedBufHeader)];
@@ -196,9 +199,6 @@ bool PublishQueueAsync::discardOldEvent(bool secondEvent) {
 
 		nextFree -= len;
 		hdr->numEvents--;
-
-		log.trace("discardOldEvent secondEvent=%d start=%lx next=%lx end=%lx numEvents=%u",
-				secondEvent, (uint32_t)start, (uint32_t)next, (uint32_t)end, hdr->numEvents);
 	}
 
 	return true;

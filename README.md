@@ -125,6 +125,12 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.0.4 (2019-06-12)
+
+- Fixed a cause where deadlock can occur if the queue fills up. If another thread was logging
+when this occurred, the Log.trace in the publish queue thread will block on the logging mutex,
+but the mutex can never clear because of the SINGLE_THREADED_BLOCK.
+
 ### 0.0.3
 
 - Added support for WITH\_ACK mode
