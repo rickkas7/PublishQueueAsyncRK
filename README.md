@@ -125,6 +125,10 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.0.5 (2019-06-27)
+
+- Same code as 0.0.4 but corrected the comments that said that WITH_ACK was not supported.
+
 ### 0.0.4 (2019-06-12)
 
 - Fixed a cause where deadlock can occur if the queue fills up. If another thread was logging

@@ -50,8 +50,7 @@ public:
 	 *
 	 * @param flags1 Normally PRIVATE. You can also use PUBLIC, but one or the other must be specified.
 	 *
-	 * @param flags2 (optional) You can use NO_ACK if desired. You should not use WITH_ACK as events are
-	 * not published if you use WITH_ACK and a worker thread as this code does.
+	 * @param flags2 (optional) You can use NO_ACK or WITH_ACK if desired.
 	 *
 	 * @return true if the event was queued or false if it was not.
 	 *
@@ -71,8 +70,7 @@ public:
 	 *
 	 * @param flags1 Normally PRIVATE. You can also use PUBLIC, but one or the other must be specified.
 	 *
-	 * @param flags2 (optional) You can use NO_ACK if desired. You should not use WITH_ACK as events are
-	 * not published if you use WITH_ACK and a worker thread as this code does.
+	 * @param flags2 (optional) You can use NO_ACK or WITH_ACK if desired.
 	 *
 	 * @return true if the event was queued or false if it was not.
 	 *
@@ -96,8 +94,7 @@ public:
 	 *
 	 * @param flags1 Normally PRIVATE. You can also use PUBLIC, but one or the other must be specified.
 	 *
-	 * @param flags2 (optional) You can use NO_ACK if desired. You should not use WITH_ACK as events are
-	 * not published if you use WITH_ACK and a worker thread as this code does.
+	 * @param flags2 (optional) You can use NO_ACK or WITH_ACK if desired.
 	 *
 	 * @return true if the event was queued or false if it was not.
 	 *

@@ -240,10 +240,6 @@ void PublishQueueAsync::checkQueueState() {
 
 		PublishFlags flags(PublishFlag(data->flags));
 
-		// For reasons that are not entirely obvious to me, you can't use WITH_ACK. If you specify it
-		// on the Photon or Electron, Particle.publish will immediately return false. This only happens
-		// with this code running in a separate thread. It works fine from the main thread.
-
 		log.info("publishing %s %s ttl=%d flags=%x", eventName, eventData, data->ttl, flags.value());
 
 		auto request = Particle.publish(eventName, eventData, data->ttl, flags);
