@@ -1,13 +1,26 @@
 #include "Particle.h"
 
+// This must be included before PublishQueueAsyncRK.h to add in SPIFFS support
+#include "SpiffsParticleRK.h"
+
 #include "PublishQueueAsyncRK.h"
 
 SYSTEM_THREAD(ENABLED);
 
-SerialLogHandler logHandler;
+SerialLogHandler logHandler(LOG_LEVEL_INFO, { // Logging level for non-application messages
+    { "app.spiffs", LOG_LEVEL_ERROR } // Logging level for SPIFFS messages
+});
 
-retained uint8_t publishQueueRetainedBuffer[2048];
-PublishQueueAsyncRetained publishQueue(publishQueueRetainedBuffer, sizeof(publishQueueRetainedBuffer));
+// SpiFlashWinbond spiFlash(SPI, A4);	// Winbond flash on SPI (A pins on Gen 2, regular SCK/MOSI/MISO on Gen 3)
+
+// SpiFlashISSI spiFlash(SPI, A2); 		// ISSI flash on SPI (A pins)
+
+SpiFlashP1 spiFlash;					// P1 external flash inside the P1 module
+
+
+SpiffsParticle fs(spiFlash);
+
+PublishQueueAsyncSpiffs publishQueue(fs, "events");
 
 enum {
 	TEST_IDLE = 0, // Don't do anything
@@ -39,8 +52,23 @@ void publishPaddedCounter(int size);
 
 void setup() {
 	Serial.begin();
+
 	Particle.function("test", testHandler);
-	publishQueue.setup();
+
+	// For testing purposes, wait 10 seconds before continuing to allow serial to connect
+	// before doing publishQueue.setup() so the debug log messages can be read.
+	waitFor(Serial.isConnected, 10000);
+
+	spiFlash.begin();
+
+	// Dedicate 64 Kbytes to file system
+	fs.withPhysicalSize(64 * 1024);
+
+	s32_t res = fs.mountAndFormatIfNecessary();
+	Log.info("mount res=%ld", res);
+	if (res == 0) {
+		publishQueue.setup();
+	}
 }
 
 void loop() {
@@ -165,3 +193,5 @@ int testHandler(String cmd) {
 	free(mutableCopy);
 	return 0;
 }
+
+

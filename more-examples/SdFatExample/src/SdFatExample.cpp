@@ -1,13 +1,19 @@
 #include "Particle.h"
 
+// This must be included before PublishQueueAsyncRK.h to add in SdFat support
+#include "SdFat.h"
+
 #include "PublishQueueAsyncRK.h"
 
 SYSTEM_THREAD(ENABLED);
 
 SerialLogHandler logHandler;
 
-retained uint8_t publishQueueRetainedBuffer[2048];
-PublishQueueAsyncRetained publishQueue(publishQueueRetainedBuffer, sizeof(publishQueueRetainedBuffer));
+const int SD_CHIP_SELECT = A2;
+
+SdFat sdCard;
+
+PublishQueueAsyncSdFat publishQueue(sdCard, "events.dat");
 
 enum {
 	TEST_IDLE = 0, // Don't do anything
@@ -39,8 +45,19 @@ void publishPaddedCounter(int size);
 
 void setup() {
 	Serial.begin();
+
 	Particle.function("test", testHandler);
-	publishQueue.setup();
+
+	// For testing purposes, wait 10 seconds before continuing to allow serial to connect
+	// before doing publishQueue.setup() so the debug log messages can be read.
+	waitFor(Serial.isConnected, 10000);
+
+	if (sdCard.begin(SD_CHIP_SELECT, SPI_FULL_SPEED)) {
+		publishQueue.setup();
+	}
+	else {
+		Log.info("failed to initialize sd card");
+	}
 }
 
 void loop() {
@@ -165,3 +182,5 @@ int testHandler(String cmd) {
 	free(mutableCopy);
 	return 0;
 }
+
+

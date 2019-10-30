@@ -1,13 +1,17 @@
 #include "Particle.h"
 
+// This must be included before PublishQueueAsyncRK.h to add in FRAM support
+#include "MB85RC256V-FRAM-RK.h"
+
 #include "PublishQueueAsyncRK.h"
 
 SYSTEM_THREAD(ENABLED);
 
 SerialLogHandler logHandler;
 
-retained uint8_t publishQueueRetainedBuffer[2048];
-PublishQueueAsyncRetained publishQueue(publishQueueRetainedBuffer, sizeof(publishQueueRetainedBuffer));
+MB85RC256V fram(Wire, 0);
+
+PublishQueueAsyncFRAM publishQueue(fram);
 
 enum {
 	TEST_IDLE = 0, // Don't do anything
@@ -39,7 +43,15 @@ void publishPaddedCounter(int size);
 
 void setup() {
 	Serial.begin();
+
 	Particle.function("test", testHandler);
+
+	// For testing purposes, wait 10 seconds before continuing to allow serial to connect
+	// before doing publishQueue.setup() so the debug log messages can be read.
+	waitFor(Serial.isConnected, 10000);
+
+	fram.begin();
+	//fram.erase();
 	publishQueue.setup();
 }
 
@@ -165,3 +177,5 @@ int testHandler(String cmd) {
 	free(mutableCopy);
 	return 0;
 }
+
+

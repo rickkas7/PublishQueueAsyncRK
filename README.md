@@ -14,6 +14,17 @@ Version 0.0.3 of this library and newer support WITH\_ACK mode!
 
 Also note: This library requires system firmware 0.7.0 or later. The publish flags were different in 0.6.x, and this library doesn't support the old method. Since it uses threads, it does not work on the Spark Core.
 
+Version 0.1.0 supports multiple back-end storage methods, including:
+
+- Retained memory
+- Regular RAM
+- FRAM (MB85RC256V ferro-electric non-volatile RAM) connected by I2C
+- SPI NOR Flash (using SpiffsParticleRK)
+- SPI Flash memory on P1 module
+- External SPI Flash soldered to E Series module
+- SD cards using the SdFat library
+
+Browsable API documentation for this library can be found [here](https://rickkas7.github.io/PublishQueueAsyncRK/).
 
 ## Using it
 
@@ -26,7 +37,11 @@ retained uint8_t publishQueueRetainedBuffer[2048];
 PublishQueueAsync publishQueue(publishQueueRetainedBuffer, sizeof(publishQueueRetainedBuffer));
 ```
 
-Note that even when cloud connected, all events are copied to this buffer first (that's what makes it asynchronous), so it must be larger than the largest event you want to send.
+Note that even when cloud connected, all events are copied to this buffer first (that's what makes it asynchronous), so it must be larger than the largest event you want to send. It must be at least 704 bytes, and preferably at least 1024 bytes.
+
+You can also use a buffer in regular (not retained) memory.
+
+For other storage methods (FRAM, flash memory, etc. see below). The initialization varies, but usage is the same.
 
 Then, when you want to send, use one of these variants instead of the Particle.publish version:
 
@@ -77,6 +92,134 @@ The second one publishes every 30 seconds from a software timer. It also publish
 
 The third is described in the next section.
 
+## More Examples
+
+There are examples of using other storage methods in the more-examples directory.
+
+### MB85RC256V FRAM
+
+You typically include something like this at the top of your main source file. The order is important; you must include the FRAM include file before PublishQueueAsyncRK.h in order to enable FRAM support.
+
+```
+#include "MB85RC256V-FRAM-RK.h"
+#include "PublishQueueAsyncRK.h"
+
+MB85RC256V fram(Wire, 0);
+
+PublishQueueAsyncFRAM publishQueue(fram);
+```
+
+In setup(), be sure to initialize the FRAM library and then the publishQueue, in that order.
+
+```
+fram.begin();
+publishQueue.setup();
+```
+
+If you only want to use a subset of the FRAM for the publish queue, specify an offset and length in the constructor
+
+```
+PublishQueueAsyncFRAM publishQueue(fram, 100, 2000);
+```
+
+
+### SPI Flash using SpiffsParticleRK
+
+Using SpiffsParticleRK you can store events in a variety of SPI NOR flash memory chips using the SpiFlashRK library.
+
+You typically include something like this at the top of your main source file. The order is important; you must include the SdFat.h before PublishQueueAsyncRK.h in order to enable SD card support.
+
+The second parameter to the publish queue constructor is the filename, it should be an 8.3 filename. It will contain binary data.
+
+```
+#include "SpiffsParticleRK.h"
+#include "PublishQueueAsyncRK.h"
+
+SpiFlashISSI spiFlash(SPI, A2); 		// ISSI flash on SPI (A pins)
+
+SpiffsParticle fs(spiFlash);
+
+PublishQueueAsyncSpiffs publishQueue(fs, "events");
+```
+
+In setup(), you initialize it like this:
+
+```
+spiFlash.begin();
+
+// Dedicate 64 Kbytes to file system (increase as desired)
+fs.withPhysicalSize(64 * 1024);
+
+s32_t res = fs.mountAndFormatIfNecessary();
+Log.info("mount res=%ld", res);
+if (res == 0) {
+	publishQueue.setup();
+}
+```
+
+#### Instantiating a SpiFlash object
+
+You typically instantiate an object to interface to the flash chip as a global variable:
+
+```
+SpiFlashISSI spiFlash(SPI, A2);
+```
+
+Use an ISSI flash, such as a [IS25LQ080B](http://www.digikey.com/product-detail/en/issi-integrated-silicon-solution-inc/IS25LQ080B-JNLE/706-1331-ND/5189766). In this case, connected to the primary SPI with A2 as the CS (chip select or SS).
+
+```
+SpiFlashWinbond spiFlash(SPI, A2);
+```
+
+Use a Winbond flash, such as a [W25Q32](https://www.digikey.com/product-detail/en/winbond-electronics/W25Q32JVSSIQ/W25Q32JVSSIQ-ND/5803981). In this case, connected to the primary SPI with A2 as the CS (chip select or SS).
+
+```
+SpiFlashWinbond spiFlash(SPI1, D5);
+```
+
+Winbond flash, connected to the secondary SPI, SPI1, with D5 as the CS (chip select or SS).
+
+```
+SpiFlashMacronix spiFlash(SPI1, D5);
+```
+
+Macronix flash, such as the [MX25L8006EM1I-12G](https://www.digikey.com/product-detail/en/macronix/MX25L8006EM1I-12G/1092-1117-ND/2744800). In this case connected to the secondary SPI, SPI1, with D5 as the CS (chip select or SS). This is the recommended for use on the E-Series module. Note that this is the 0.154", 3.90mm width 8-SOIC package.
+
+```
+SpiFlashP1 spiFlash;
+```
+
+This is the external flash on the P1 module. This extra flash chip is entirely available for your user; it is not used by the system firmware at this time. You can only use this on the P1; it relies on system functions that are not available on other devices.
+
+
+### SD cards using SdFat
+
+You typically include something like this at the top of your main source file. The order is important; you must include the SdFat.h before PublishQueueAsyncRK.h in order to enable SD card support.
+
+The second parameter to the publish queue constructor is the filename, it should be an 8.3 filename. It will contain binary data.
+
+```
+#include "SdFat.h"
+#include "PublishQueueAsyncRK.h"
+
+const int SD_CHIP_SELECT = A2;
+
+SdFat sdCard;
+
+PublishQueueAsyncSdFat publishQueue(sdCard, "events.dat");
+```
+
+In your setup function you typically call:
+
+```
+	if (sdCard.begin(SD_CHIP_SELECT, SPI_FULL_SPEED)) {
+		publishQueue.setup();
+	}
+	else {
+		Log.info("failed to initialize sd card");
+	}
+```
+
 ## Test Suite
 
 The example 03-test-suite makes it easy to test some of the features. Flag the code to a Photon or Electron and send a function to it to make it do things:
@@ -125,6 +268,10 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.1.0 (2019-10-30)
+
+- Refactored code to allow for storage in other things like FRAM, SPI Flash, and SD Card.
+
 ### 0.0.5 (2019-06-27)
 
 - Same code as 0.0.4 but corrected the comments that said that WITH_ACK was not supported.
@@ -139,3 +286,6 @@ but the mutex can never clear because of the SINGLE_THREADED_BLOCK.
 
 - Added support for WITH\_ACK mode
 
+### 0.1.0
+
+- Added support for other storage methods

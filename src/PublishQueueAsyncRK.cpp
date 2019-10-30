@@ -2,36 +2,121 @@
 #include "PublishQueueAsyncRK.h"
 
 
-static const uint32_t RETAINED_BUF_HEADER_MAGIC = 0xd19cab61;
+Logger pubqLogger("app.pubq");
 
-typedef struct {
-	uint32_t	magic;			// RETAINED_BUF_HEADER_MAGIC
-	uint16_t	size;			// retainedBufferSize, in case it changed
-	uint16_t	numEvents;		// number of events, see the EventData structure
-} RetainedBufHeader;
+PublishQueueAsyncBase::PublishQueueAsyncBase() {
 
-typedef struct {
-	int ttl;
-	uint8_t flags;
-	// eventName (c-string, packed)
-	// eventData (c-string, packed)
-	// padded to 4-byte alignment
-} EventData;
+}
 
-static Logger log("app.pubq");
+PublishQueueAsyncBase::~PublishQueueAsyncBase() {
 
-PublishQueueAsync::PublishQueueAsync(uint8_t *retainedBuffer, uint16_t retainedBufferSize) :
+}
+
+void PublishQueueAsyncBase::setup() {
+	haveSetup = true;
+
+	os_mutex_create(&mutex);
+
+	thread = new Thread("PublishQueueAsync", threadFunctionStatic, this, OS_THREAD_PRIORITY_DEFAULT, 2048);
+}
+
+void PublishQueueAsyncBase::mutexLock() const {
+	os_mutex_lock(mutex);
+}
+
+void PublishQueueAsyncBase::mutexUnlock() const {
+	os_mutex_unlock(mutex);
+}
+
+void PublishQueueAsyncBase::threadFunction() {
+	// Call the stateHandler forever
+	while(true) {
+		stateHandler(*this);
+		os_thread_yield();
+	}
+}
+
+void PublishQueueAsyncBase::startState() {
+	// If we had other initialization to do, this would be a good place to do it.
+
+	// Ready to process events
+	stateHandler = &PublishQueueAsyncBase::checkQueueState;
+}
+
+
+void PublishQueueAsyncBase::checkQueueState() {
+	if (!pausePublishing && Particle.connected() && millis() - lastPublish >= 1010) {
+
+		PublishQueueEventData *data = getOldestEvent();
+		if (data) {
+			// We have an event and can probably publish
+			isSending = true;
+
+			const char *buf = reinterpret_cast<const char *>(data);
+			const char *eventName = &buf[sizeof(PublishQueueEventData)];
+			const char *eventData = eventName;
+			eventData += strlen(eventData) + 1;
+
+			PublishFlags flags(PublishFlag(data->flags));
+
+			pubqLogger.info("publishing %s %s ttl=%d flags=%x", eventName, eventData, data->ttl, flags.value());
+
+			auto request = Particle.publish(eventName, eventData, data->ttl, flags);
+
+			// Use this technique of looping because the future will not be handled properly
+			// when waiting in a worker thread like this.
+			while(!request.isDone()) {
+				delay(1);
+			}
+			bool bResult = request.isSucceeded();
+			if (bResult) {
+				// Successfully published
+				pubqLogger.info("published successfully");
+				discardOldEvent(false);
+			}
+			else {
+				// Did not successfully transmit, try again after retry time
+				pubqLogger.info("published failed, will retry in %lu ms", failureRetryMs);
+				stateHandler = &PublishQueueAsyncBase::waitRetryState;
+			}
+			isSending = false;
+			lastPublish = millis();
+		}
+		else {
+			// No event
+		}
+	}
+	else {
+		// Not cloud connected or can't publish yet (not connected or published too recently)
+	}
+
+}
+
+void PublishQueueAsyncBase::waitRetryState() {
+	if (millis() - lastPublish >= failureRetryMs) {
+		stateHandler = &PublishQueueAsyncBase::checkQueueState;
+	}
+}
+
+
+// [static]
+void PublishQueueAsyncBase::threadFunctionStatic(void *param) {
+	static_cast<PublishQueueAsync *>(param)->threadFunction();
+}
+
+
+PublishQueueAsyncRetained::PublishQueueAsyncRetained(uint8_t *retainedBuffer, uint16_t retainedBufferSize) :
 		retainedBuffer(retainedBuffer), retainedBufferSize(retainedBufferSize) {
 
 	// Initialize the retained buffer
 	bool initBuffer = false;
 
-	volatile RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
-	if (hdr->magic == RETAINED_BUF_HEADER_MAGIC && hdr->size == retainedBufferSize) {
+	volatile PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+	if (hdr->magic == PUBLISH_QUEUE_HEADER_MAGIC && hdr->size == retainedBufferSize) {
 		// Calculate the next write offset
 		uint8_t *end = &retainedBuffer[retainedBufferSize];
 
-		nextFree = &retainedBuffer[sizeof(RetainedBufHeader)];
+		nextFree = &retainedBuffer[sizeof(PublishQueueHeader)];
 		for(uint16_t ii = 0; ii < hdr->numEvents; ii++) {
 			nextFree = skipEvent(nextFree);
 			if (nextFree > end) {
@@ -49,24 +134,19 @@ PublishQueueAsync::PublishQueueAsync(uint8_t *retainedBuffer, uint16_t retainedB
 	//initBuffer = true; // Uncomment to discard old data
 
 	if (initBuffer) {
-		hdr->magic = RETAINED_BUF_HEADER_MAGIC;
+		hdr->magic = PUBLISH_QUEUE_HEADER_MAGIC;
 		hdr->size = retainedBufferSize;
 		hdr->numEvents = 0;
-		nextFree = &retainedBuffer[sizeof(RetainedBufHeader)];
+		nextFree = &retainedBuffer[sizeof(PublishQueueHeader)];
 	}
 }
 
-PublishQueueAsync::~PublishQueueAsync() {
+PublishQueueAsyncRetained::~PublishQueueAsyncRetained() {
 
 }
 
-void PublishQueueAsync::setup() {
-	haveSetup = true;
 
-	thread = new Thread("PublishQueueAsync", threadFunctionStatic, this, OS_THREAD_PRIORITY_DEFAULT, 2048);
-}
-
-bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl, PublishFlags flags1, PublishFlags flags2) {
+bool PublishQueueAsyncRetained::publishCommon(const char *eventName, const char *data, int ttl, PublishFlags flags1, PublishFlags flags2) {
 
 	if (!haveSetup) {
 		setup();
@@ -77,81 +157,97 @@ bool PublishQueueAsync::publish(const char *eventName, const char *data, int ttl
 	}
 
 	// Size is the size of the header, the two c-strings (with null terminators), rounded up to a multiple of 4
-	size_t size = sizeof(EventData) + strlen(eventName) + strlen(data) + 2;
+	size_t size = sizeof(PublishQueueEventData) + strlen(eventName) + strlen(data) + 2;
 	if ((size % 4) != 0) {
 		size += 4 - (size % 4);
 	}
 
-	log.info("queueing eventName=%s data=%s ttl=%d flags1=%d flags2=%d size=%d", eventName, data, ttl, flags1.value(), flags2.value(), size);
+	pubqLogger.info("queueing eventName=%s data=%s ttl=%d flags1=%d flags2=%d size=%d", eventName, data, ttl, flags1.value(), flags2.value(), size);
 
-	if  (size > (retainedBufferSize - sizeof(RetainedBufHeader))) {
+	if  (size > (retainedBufferSize - sizeof(PublishQueueHeader))) {
 		// Special case: event is larger than the retained buffer. Rather than throw out all events
 		// before discovering this, check that case first
 		return false;
 	}
 
 	while(true) {
-		SINGLE_THREADED_BLOCK() {
-			// Important: Do not log.info, etc. within a SINGLE_THREADED_BLOCK as it can cause
-			// deadlock if another thread already has the log mutex!
-			uint8_t *end = &retainedBuffer[retainedBufferSize];
-			if ((size_t)(end - nextFree) >= size) {
-				// There is room to fit this
-				EventData *eventData = reinterpret_cast<EventData *>(nextFree);
-				eventData->ttl = ttl;
-				eventData->flags = flags1.value() | flags2.value();
+		StMutexLock lock(this);
 
-				char *cp = reinterpret_cast<char *>(nextFree);
-				cp += sizeof(EventData);
+		uint8_t *end = &retainedBuffer[retainedBufferSize];
+		if ((size_t)(end - nextFree) >= size) {
+			// There is room to fit this
+			PublishQueueEventData *eventData = reinterpret_cast<PublishQueueEventData *>(nextFree);
+			eventData->ttl = ttl;
+			eventData->flags = flags1.value() | flags2.value();
 
-				strcpy(cp, eventName);
-				cp += strlen(cp) + 1;
+			char *cp = reinterpret_cast<char *>(nextFree);
+			cp += sizeof(PublishQueueEventData);
 
-				strcpy(cp, data);
+			strcpy(cp, eventName);
+			cp += strlen(cp) + 1;
 
-				nextFree += size;
+			strcpy(cp, data);
 
-				RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
-				hdr->numEvents++;
-				return true;
-			}
+			nextFree += size;
 
-			// If there's only one event, there's nothing left to discard, this event is too large
-			// to fit with the existing first event (which we can't delete because it might be
-			// in the process of being sent)
-			RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
-			if (hdr->numEvents == 1) {
-				return false;
-			}
+			PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+			hdr->numEvents++;
+			return true;
+		}
 
-			// Discard the oldest event (false) if we're not currently sending.
-			// If we are sending (isSending=true), discard the second oldest event
-			discardOldEvent(isSending);
+		// If there's only one event, there's nothing left to discard, this event is too large
+		// to fit with the existing first event (which we can't delete because it might be
+		// in the process of being sent)
+		PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+		if (hdr->numEvents == 1) {
+			return false;
+		}
 
-
+		// Discard the oldest event (false) if we're not currently sending.
+		// If we are sending (isSending=true), discard the second oldest event
+		if (!discardOldEvent(isSending)) {
+			// There isn't an event to discard, so we don't have enough room
 			return false;
 		}
 	}
 
-	return true;
+	// Not reached
+	return false;
 }
 
-bool PublishQueueAsync::clearEvents() {
+
+PublishQueueEventData *PublishQueueAsyncRetained::getOldestEvent() {
+	// This entire function holds a mutex lock that's released when returning
+	StMutexLock lock(this);
+	PublishQueueEventData *eventData = NULL;
+
+	volatile PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+	if (hdr->numEvents > 0) {
+		eventData = reinterpret_cast<PublishQueueEventData *>(&retainedBuffer[sizeof(PublishQueueHeader)]);
+	}
+
+	return eventData;
+}
+
+bool PublishQueueAsyncRetained::clearEvents() {
+
+	// This entire function holds a mutex lock that's released when returning
+
 	bool result = false;
 
-	SINGLE_THREADED_BLOCK() {
-		RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
-		if (!isSending) {
-			hdr->numEvents = 0;
-			result = true;
-		}
+	StMutexLock lock(this);
+
+	PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+	if (!isSending) {
+		hdr->numEvents = 0;
+		result = true;
 	}
 
 	return result;
 }
 
-uint8_t *PublishQueueAsync::skipEvent(uint8_t *start) {
-	start += sizeof(EventData);
+uint8_t *PublishQueueAsyncRetained::skipEvent(uint8_t *start) {
+	start += sizeof(PublishQueueEventData);
 	start += strlen(reinterpret_cast<char *>(start)) + 1;
 	start += strlen(reinterpret_cast<char *>(start)) + 1;
 
@@ -166,118 +262,41 @@ uint8_t *PublishQueueAsync::skipEvent(uint8_t *start) {
 }
 
 
-bool PublishQueueAsync::discardOldEvent(bool secondEvent) {
-	// Important: Do not log.info, etc. within this function as it's called within a SINGLE_THREADED_BLOCK
-	// which can cause deadlock if another thread already has the log mutex!
+bool PublishQueueAsyncRetained::discardOldEvent(bool secondEvent) {
+	// This entire function holds a mutex lock that's released when returning
+	StMutexLock lock(this);
 
-	SINGLE_THREADED_BLOCK() {
-		RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
-		uint8_t *start = &retainedBuffer[sizeof(RetainedBufHeader)];
-		uint8_t *end = &retainedBuffer[retainedBufferSize];
+	PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+	uint8_t *start = &retainedBuffer[sizeof(PublishQueueHeader)];
+	uint8_t *end = &retainedBuffer[retainedBufferSize];
 
-		if (secondEvent) {
-			if (hdr->numEvents < 2) {
-				return false;
-			}
-			start = skipEvent(start);
+	if (secondEvent) {
+		if (hdr->numEvents < 2) {
+			return false;
 		}
-		else {
-			if (hdr->numEvents < 1) {
-				return false;
-			}
-		}
-
-		// Remove the event at start
-		uint8_t *next = skipEvent(start);
-		size_t len = next - start;
-
-		size_t after = end - next;
-		if (after > 0) {
-			// Move events down
-			memmove(start, next, after);
-		}
-
-		nextFree -= len;
-		hdr->numEvents--;
+		start = skipEvent(start);
 	}
+	else {
+		if (hdr->numEvents < 1) {
+			return false;
+		}
+	}
+
+	// Remove the event at start
+	uint8_t *next = skipEvent(start);
+	size_t len = next - start;
+
+	size_t after = end - next;
+	if (after > 0) {
+		// Move events down
+		memmove(start, next, after);
+	}
+
+	nextFree -= len;
+	hdr->numEvents--;
+
 
 	return true;
 }
 
-
-void PublishQueueAsync::threadFunction() {
-	// Call the stateHandler forever
-	while(true) {
-		stateHandler(*this);
-		os_thread_yield();
-	}
-}
-
-void PublishQueueAsync::startState() {
-	// If we had other initialization to do, this would be a good place to do it.
-
-	// Ready to process events
-	stateHandler = &PublishQueueAsync::checkQueueState;
-}
-
-void PublishQueueAsync::checkQueueState() {
-	// Is there data waiting to go out?
-	volatile RetainedBufHeader *hdr = reinterpret_cast<RetainedBufHeader *>(retainedBuffer);
-
-	bool haveEvent = false;
-	SINGLE_THREADED_BLOCK() {
-		haveEvent = (hdr->numEvents > 0);
-	}
-
-	if (haveEvent && Particle.connected() && millis() - lastPublish >= 1010) {
-		// We have an event and can probably publish
-		isSending = true;
-
-		EventData *data = reinterpret_cast<EventData *>(&retainedBuffer[sizeof(RetainedBufHeader)]);
-		const char *eventName = reinterpret_cast<const char *>(&retainedBuffer[sizeof(RetainedBufHeader) + sizeof(EventData)]);
-		const char *eventData = eventName;
-		eventData += strlen(eventData) + 1;
-
-		PublishFlags flags(PublishFlag(data->flags));
-
-		log.info("publishing %s %s ttl=%d flags=%x", eventName, eventData, data->ttl, flags.value());
-
-		auto request = Particle.publish(eventName, eventData, data->ttl, flags);
-
-		// Use this technique of looping because the future will not be handled properly
-		// when waiting in a worker thread like this.
-		while(!request.isDone()) {
-			delay(1);
-		}
-		bool bResult = request.isSucceeded();
-		if (bResult) {
-			// Successfully published
-			log.info("published successfully");
-			discardOldEvent(false);
-		}
-		else {
-			// Did not successfully transmit, try again after retry time
-			log.info("published failed, will retry in %lu ms", failureRetryMs);
-			stateHandler = &PublishQueueAsync::waitRetryState;
-		}
-		isSending = false;
-		lastPublish = millis();
-	}
-	else {
-		// No event or can't publish yet (not connected or published too recently)
-	}
-
-}
-
-void PublishQueueAsync::waitRetryState() {
-	if (millis() - lastPublish >= failureRetryMs) {
-		stateHandler = &PublishQueueAsync::checkQueueState;
-	}
-}
-
-
-// [static]
-void PublishQueueAsync::threadFunctionStatic(void *param) {
-	static_cast<PublishQueueAsync *>(param)->threadFunction();
-}
 
