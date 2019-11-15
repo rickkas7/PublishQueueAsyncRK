@@ -268,6 +268,10 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.1.1 (2019-11-15)
+
+- Fixed a bug that causes thread deadlock when the publish queue is full.
+
 ### 0.1.0 (2019-10-30)
 
 - Refactored code to allow for storage in other things like FRAM, SPI Flash, and SD Card.

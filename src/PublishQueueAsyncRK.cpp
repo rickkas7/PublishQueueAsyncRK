@@ -171,36 +171,38 @@ bool PublishQueueAsyncRetained::publishCommon(const char *eventName, const char 
 	}
 
 	while(true) {
-		StMutexLock lock(this);
+		{
+			StMutexLock lock(this);
 
-		uint8_t *end = &retainedBuffer[retainedBufferSize];
-		if ((size_t)(end - nextFree) >= size) {
-			// There is room to fit this
-			PublishQueueEventData *eventData = reinterpret_cast<PublishQueueEventData *>(nextFree);
-			eventData->ttl = ttl;
-			eventData->flags = flags1.value() | flags2.value();
+			uint8_t *end = &retainedBuffer[retainedBufferSize];
+			if ((size_t)(end - nextFree) >= size) {
+				// There is room to fit this
+				PublishQueueEventData *eventData = reinterpret_cast<PublishQueueEventData *>(nextFree);
+				eventData->ttl = ttl;
+				eventData->flags = flags1.value() | flags2.value();
 
-			char *cp = reinterpret_cast<char *>(nextFree);
-			cp += sizeof(PublishQueueEventData);
+				char *cp = reinterpret_cast<char *>(nextFree);
+				cp += sizeof(PublishQueueEventData);
 
-			strcpy(cp, eventName);
-			cp += strlen(cp) + 1;
+				strcpy(cp, eventName);
+				cp += strlen(cp) + 1;
 
-			strcpy(cp, data);
+				strcpy(cp, data);
 
-			nextFree += size;
+				nextFree += size;
 
+				PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+				hdr->numEvents++;
+				return true;
+			}
+
+			// If there's only one event, there's nothing left to discard, this event is too large
+			// to fit with the existing first event (which we can't delete because it might be
+			// in the process of being sent)
 			PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
-			hdr->numEvents++;
-			return true;
-		}
-
-		// If there's only one event, there's nothing left to discard, this event is too large
-		// to fit with the existing first event (which we can't delete because it might be
-		// in the process of being sent)
-		PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
-		if (hdr->numEvents == 1) {
-			return false;
+			if (hdr->numEvents == 1) {
+				return false;
+			}
 		}
 
 		// Discard the oldest event (false) if we're not currently sending.
