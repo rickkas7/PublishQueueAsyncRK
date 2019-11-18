@@ -9,11 +9,11 @@
   electron: [1.0.0]
 - build: examples/3-test-suite
   electron: [latest]
-- build:more-examples/FRAMExample
+- build: more-examples/FRAMExample
   electron: [latest]
-- build:more-examples/SdFatExample
+- build: more-examples/SdFatExample
   boron: [latest]
-- build:more-examples/SpiffsExample
+- build: more-examples/SpiffsExample
   electron: [latest]
-  
+
   
