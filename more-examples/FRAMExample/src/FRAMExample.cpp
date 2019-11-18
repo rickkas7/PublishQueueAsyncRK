@@ -11,7 +11,7 @@ SerialLogHandler logHandler;
 
 MB85RC256V fram(Wire, 0);
 
-PublishQueueAsyncFRAM publishQueue(fram);
+PublishQueueAsyncFRAM publishQueue(fram, 0, 4096); // Use first 4K of FRAM for event queue
 
 enum {
 	TEST_IDLE = 0, // Don't do anything

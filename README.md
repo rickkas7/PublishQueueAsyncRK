@@ -268,6 +268,12 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.1.2 (2019-11-18)
+
+- Fixed a bug that causes thread deadlock when using FRAM
+- Fixed a bug that can cause corrupted event data when FRAM is full
+- Upgraded to MB85RC256V version 0.0.4 for FRAM example (adds support for MB85RC64, MB85RC512, and MB85RC1M)
+
 ### 0.1.1 (2019-11-15)
 
 - Fixed a bug that causes thread deadlock when the publish queue is full.

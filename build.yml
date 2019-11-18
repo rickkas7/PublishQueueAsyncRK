@@ -1,13 +1,19 @@
 - build: examples/1-periodic
-  photon: [0.7.0, 1.0.0, 1.1.0, 1.2.1-rc.3, 1.3.1, 1.4.0]
+  photon: [1.0.0, 1.1.0, 1.2.1, 1.3.1, 1.4.2]
   p1: [1.0.0,latest]
   electron: [1.1.0,latest]
   argon: [0.9.0, 1.1.0, latest]
-  boron: [0.8.0-rc.27, 1.3.1, latest]
+  boron: [1.2.1, latest]
   xenon: [latest]
 - build: examples/2-button-and-timer
   electron: [1.0.0]
 - build: examples/3-test-suite
-  electron: [1.0.0]
-
+  electron: [latest]
+- build:more-examples/FRAMExample
+  electron: [latest]
+- build:more-examples/SdFatExample
+  boron: [latest]
+- build:more-examples/SpiffsExample
+  electron: [latest]
+  
   

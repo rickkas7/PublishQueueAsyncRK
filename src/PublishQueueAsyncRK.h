@@ -499,9 +499,12 @@ public:
 	 *
 	 * @param start Optional start address, default is 0 (beginning of FRAM)
 	 *
-	 * @param len Optional length, default is size of FRAM. Note that this is a length, not an ending address.
+	 * @param len Optional length, default is size of FRAM. Note that this is a length relative to start, not an ending address.
 	 */
-	PublishQueueAsyncFRAM(MB85RC256V &fram, size_t start = 0, size_t len = MB85RC256V::MEMORY_SIZE) : fram(fram), start(start), len(len) {
+	PublishQueueAsyncFRAM(MB85RC &fram, size_t start = 0, size_t len = 0) : fram(fram), start(start), len(len) {
+		if (len == 0) {
+			len = fram.length() - start;
+		}
 	}
 
 	/**
@@ -543,7 +546,7 @@ public:
 			// pubqLogger.info("No magic bytes or invalid length");
 		}
 
-		//initBuffer = true; // Uncomment to discard old data
+		// initBuffer = true; // Uncomment to discard old data
 
 		if (initBuffer) {
 			header.magic = PUBLISH_QUEUE_HEADER_MAGIC;
@@ -579,7 +582,7 @@ public:
 			size += 4 - (size % 4);
 		}
 
-		pubqLogger.info("queueing eventName=%s data=%s ttl=%d flags1=%d flags2=%d size=%d", eventName, data, ttl, flags1.value(), flags2.value(), size);
+		// pubqLogger.info("queueing eventName=%s data=%s ttl=%d flags1=%d flags2=%d size=%d", eventName, data, ttl, flags1.value(), flags2.value(), size);
 
 		if  (size > (len - sizeof(PublishQueueHeader))) {
 			// Special case: event is larger than the FRAM. Rather than throw out all events
@@ -588,42 +591,44 @@ public:
 		}
 
 		while(true) {
-			StMutexLock lock(this);
+			{
+				StMutexLock lock(this);
 
-			if ((start + len - nextFree) >= size) {
-				// There is room to fit this
-				// pubqLogger.info("writing event nextFree=%u size=%u", nextFree, size);
+				if ((start + len - nextFree) >= size) {
+					// There is room to fit this
+					// pubqLogger.info("writing event nextFree=%u size=%u", nextFree, size);
 
-				PublishQueueEventData *eventData = (PublishQueueEventData *)eventBuf;
-				eventData->ttl = ttl;
-				eventData->flags = flags1.value() | flags2.value();
+					PublishQueueEventData *eventData = (PublishQueueEventData *)eventBuf;
+					eventData->ttl = ttl;
+					eventData->flags = flags1.value() | flags2.value();
 
-				char *cp = (char *) eventBuf;
-				cp += sizeof(PublishQueueEventData);
+					char *cp = (char *) eventBuf;
+					cp += sizeof(PublishQueueEventData);
 
-				strcpy(cp, eventName);
-				cp += strlen(cp) + 1;
+					strcpy(cp, eventName);
+					cp += strlen(cp) + 1;
 
-				strcpy(cp, data);
+					strcpy(cp, data);
 
-				fram.writeData(nextFree, (uint8_t *)&eventBuf, size);
+					fram.writeData(nextFree, (uint8_t *)&eventBuf, size);
 
-				nextFree += size;
-				header.numEvents++;
-				fram.writeData(start, (uint8_t *)&header, sizeof(PublishQueueHeader));
+					nextFree += size;
+					header.numEvents++;
+					fram.writeData(start, (uint8_t *)&header, sizeof(PublishQueueHeader));
 
-				pubqLogger.trace("after writing nextFree=%u numEvents=%u", nextFree, header.numEvents);
+					// pubqLogger.info("after writing nextFree=%u numEvents=%u", nextFree, header.numEvents);
 
-				return true;
-			}
+					return true;
+				}
 
-			pubqLogger.info("need to discard event, FRAM is full");
+				pubqLogger.info("need to discard event, FRAM is full");
 
-			// If there's only one event, there's nothing left to discard, this event is too large
-			// to fit with the existing first event (which we can't delete because it might be
-			// in the process of being sent)
-			if (header.numEvents == 1) {
-				return false;
+				// If there's only one event, there's nothing left to discard, this event is too large
+				// to fit with the existing first event (which we can't delete because it might be
+				// in the process of being sent)
+				if (header.numEvents == 1) {
+					return false;
+				}
 			}
 
 			// Discard the oldest event (false) if we're not currently sending.
@@ -712,22 +717,20 @@ public:
 			ii++;
 		}
 
-		// pubqLogger.trace("discardOldEvent secondEvent=%d prevAddr=%u addr=%u", secondEvent, prevAddr, addr);
+		// pubqLogger.info("discardOldEvent secondEvent=%d prevAddr=%u addr=%u nextFree=%u", secondEvent, prevAddr, addr, nextFree); // TEMPORARY
 
-		for(; ii < header.numEvents; ii++) {
-			// skipEvent reads the event at addr into eventBuf
-			size_t nextAddr = skipEvent(addr, eventBuf);
-
-			// We assume the data is still in eventBuf and don't read it again
-			fram.writeData(prevAddr, eventBuf, nextAddr - addr);
-
-			prevAddr = addr;
-			addr = nextFree = nextAddr;
+		if (nextFree > addr) {
+			// pubqLogger.info("moveData from %u to %u len=%u", addr, prevAddr, nextFree - addr);
+			fram.moveData(addr, prevAddr, nextFree - addr);
 		}
+		nextFree -= (addr - prevAddr);
+
 		header.numEvents--;
 		fram.writeData(start, (uint8_t *)&header, sizeof(PublishQueueHeader));
 
-		return false;
+		// pubqLogger.info("after numEvents=%u nextFree=%u", header.numEvents, nextFree); // TEMPORARY
+
+		return true;
 	}
 
 	/**
@@ -769,7 +772,7 @@ public:
 
 
 protected:
-	MB85RC256V &fram;	//!< Object for the FRAM
+	MB85RC &fram;		//!< Object for the FRAM
 	size_t start;		//!< Start offset (0 = beginning of FRAM)
 	size_t len;			//!< Length to use (relative to start!)
 
