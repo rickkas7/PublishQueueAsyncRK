@@ -14,6 +14,6 @@
 - build: more-examples/SdFatExample
   boron: [latest]
 - build: more-examples/SpiffsExample
-  electron: [latest]
+  p1: [latest]
 
   
