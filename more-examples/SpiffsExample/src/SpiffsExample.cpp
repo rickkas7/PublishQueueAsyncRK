@@ -112,9 +112,13 @@ void loop() {
 		Particle.disconnect();
 		delay(2000);
 
+		Log.info("before publishing numEvents=%d", publishQueue.getNumEvents());
+
 		for(int ii = 0; ii < count; ii++) {
 			publishPaddedCounter(size);
 		}
+
+		Log.info("after publishing numEvents=%d", publishQueue.getNumEvents());
 
 		Log.info("Going to Particle.connect()...");
 		Particle.connect();

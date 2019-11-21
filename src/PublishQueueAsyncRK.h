@@ -215,6 +215,12 @@ public:
 	 */
 	virtual bool discardOldEvent(bool secondEvent) = 0;
 
+
+	/**
+	 * @brief Get the number of events in the queue (0 = empty)
+	 */
+	virtual uint16_t getNumEvents() const = 0;
+
 	/**
 	 * @brief Pause publishing, even if it would be allowed because the cloud is connected
 	 *
@@ -424,6 +430,12 @@ public:
 	 * @returns A pointer to the beginning of the next event
 	 */
 	uint8_t *skipEvent(uint8_t *start);
+
+	/**
+	 * @brief Get the number of events in the queue (0 = empty)
+	 */
+	uint16_t getNumEvents() const;
+
 
 protected:
 	uint8_t *retainedBuffer;		//!< Pointer to the beginning of the retained (or regular) RAM buffer
@@ -769,6 +781,20 @@ public:
 		return next;
 	}
 
+	/**
+	 * @brief Get the number of events in the queue (0 = empty)
+	 */
+	uint16_t getNumEvents() const {
+		uint16_t numEvents = 0;
+
+		{
+			StMutexLock lock(this);
+
+			numEvents = header.numEvents;
+		}
+
+		return numEvents;
+	}
 
 
 protected:
@@ -1221,6 +1247,20 @@ public:
 		return next;
 	}
 
+	/**
+	 * @brief Get the number of events in the queue (0 = empty)
+	 */
+	uint16_t getNumEvents() const {
+		uint16_t numEvents = 0;
+
+		{
+			StMutexLock lock(this);
+
+			numEvents = header.numEvents;
+		}
+
+		return numEvents;
+	}
 
 protected:
 	/**

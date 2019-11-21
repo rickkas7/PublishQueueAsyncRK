@@ -301,4 +301,17 @@ bool PublishQueueAsyncRetained::discardOldEvent(bool secondEvent) {
 	return true;
 }
 
+uint16_t PublishQueueAsyncRetained::getNumEvents() const {
+	uint16_t numEvents = 0;
+
+	{
+		StMutexLock lock(this);
+
+		PublishQueueHeader *hdr = reinterpret_cast<PublishQueueHeader *>(retainedBuffer);
+		numEvents = hdr->numEvents;
+	}
+
+	return numEvents;
+}
+
 

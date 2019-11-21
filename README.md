@@ -268,6 +268,10 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.1.3 (2019-11-21)
+
+- Added getNumEvent() method so you can know if the queue is empty or not
+
 ### 0.1.2 (2019-11-18)
 
 - Fixed a bug that causes thread deadlock when using FRAM
