@@ -80,6 +80,11 @@ public:
 	virtual ~PublishQueueAsyncBase();
 
 	/**
+	 * @brief Set up webhook response mode
+	 */
+	PublishQueueAsyncBase &withHookResponse(String eventPrefix);
+
+	/**
 	 * @brief Start the thread. You must call this from setup.
 	 *
 	 * Since version 0.0.1 did not have the setup method, if you don't setup() it will be set up when you first
@@ -267,6 +272,8 @@ public:
 	static const size_t EVENT_BUF_SIZE = sizeof(PublishQueueEventData) + 65 + 623;
 
 protected:
+	void subscribeHandler(const char *eventName, const char *data);
+
 	/**
 	 * @brief The thread function for the publish thread
 	 */
@@ -286,6 +293,11 @@ protected:
 	 * @brief Worker thread state machine check queue state handler
 	 */
 	void checkQueueState();
+
+	/**
+	 * @brief Worker thread state machine wait for hook-respons
+	 */
+	void waitHookResponse();
 
 	/**
 	 * @brief Worker thread state machine wait to retry publishing state handler
@@ -345,6 +357,16 @@ protected:
 	 * @brief True if publishing has been manually paused
 	 */
 	bool pausePublishing = false;
+
+	/**
+	 * @brief Event prefix for hook response mode. 
+	 */
+	String hookResponseEventPrefix;
+
+	/**
+	 * @brief Flag that indicates we received a successful hook-response
+	 */
+	bool hookResponseReceived = false;
 };
 
 /**

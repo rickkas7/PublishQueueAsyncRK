@@ -12,12 +12,25 @@ PublishQueueAsyncBase::~PublishQueueAsyncBase() {
 
 }
 
+PublishQueueAsyncBase &PublishQueueAsyncBase::withHookResponse(String eventPrefix) {
+	hookResponseEventPrefix = eventPrefix; 
+	return *this;
+}
+
+
 void PublishQueueAsyncBase::setup() {
 	haveSetup = true;
 
 	os_mutex_create(&mutex);
 
 	thread = new Thread("PublishQueueAsync", threadFunctionStatic, this, OS_THREAD_PRIORITY_DEFAULT, 2048);
+
+	// Set up hook response mode if enabled
+	if (hookResponseEventPrefix.length() > 0) {
+		String eventName = String::format("/hook-response/%s/%s/", System.deviceID().c_str(), hookResponseEventPrefix.c_str());
+		pubqLogger.info("subscribing to %s", eventName.c_str());
+		Particle.subscribe(eventName, &PublishQueueAsyncBase::subscribeHandler, this);
+	}
 }
 
 void PublishQueueAsyncBase::mutexLock() const {
@@ -51,6 +64,7 @@ void PublishQueueAsyncBase::checkQueueState() {
 		if (data) {
 			// We have an event and can probably publish
 			isSending = true;
+			hookResponseReceived = false;
 
 			const char *buf = reinterpret_cast<const char *>(data);
 			const char *eventName = &buf[sizeof(PublishQueueEventData)];
@@ -71,8 +85,14 @@ void PublishQueueAsyncBase::checkQueueState() {
 			bool bResult = request.isSucceeded();
 			if (bResult) {
 				// Successfully published
-				pubqLogger.info("published successfully");
-				discardOldEvent(false);
+				if (hookResponseEventPrefix.length() > 0) {
+					pubqLogger.info("published successfully, waiting for hook-response");
+					stateHandler = &PublishQueueAsyncBase::waitHookResponse;
+				}
+				else {
+					pubqLogger.info("published successfully");
+					discardOldEvent(false);
+				}
 			}
 			else {
 				// Did not successfully transmit, try again after retry time
@@ -89,8 +109,20 @@ void PublishQueueAsyncBase::checkQueueState() {
 	else {
 		// Not cloud connected or can't publish yet (not connected or published too recently)
 	}
-
 }
+
+void PublishQueueAsyncBase::waitHookResponse() {
+	if (millis() - lastPublish >= failureRetryMs) {
+		pubqLogger.info("timed out waiting for hook-response, retrying");
+		stateHandler = &PublishQueueAsyncBase::checkQueueState;
+	}
+	if (hookResponseReceived) {
+		pubqLogger.info("successful hook-response!");
+		discardOldEvent(false);
+		stateHandler = &PublishQueueAsyncBase::checkQueueState;
+	}
+} 
+
 
 void PublishQueueAsyncBase::waitRetryState() {
 	if (millis() - lastPublish >= failureRetryMs) {
@@ -98,6 +130,11 @@ void PublishQueueAsyncBase::waitRetryState() {
 	}
 }
 
+void PublishQueueAsyncBase::subscribeHandler(const char *eventName, const char *data) {
+	// TODO: Support putting a success response code in JSON in the data
+	pubqLogger.info("hook-response received eventName=%s data=%s", eventName, data);
+	hookResponseReceived = true;
+}
 
 // [static]
 void PublishQueueAsyncBase::threadFunctionStatic(void *param) {

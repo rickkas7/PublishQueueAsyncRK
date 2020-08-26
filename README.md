@@ -220,6 +220,41 @@ In your setup function you typically call:
 	}
 ```
 
+## Webhook Response Mode
+
+In normal operation, the event is removed from the queue when Particle.publish returns true. When use with WITH_ACK, this is a pretty reliable indication that the event has successfully been received by the Particle cloud.
+
+In some cases, you might have a webhook that responds to this event and sends it to an external server. Using webhook response mode extends the check to the next step in the process, only deleting the event from the on-device queue after the webhook has been successfully processed by the server (200 HTTP response). If the server is offline, for example, this would leave the event in the on-device queue to be retransmitted later (failureRetryMs, default is 30 seconds).
+
+Using this mode requires two things:
+
+- A correctly configured webhook. This requires a non-default configuration for the Response Topic so the hook-response can be properly handled.
+- Add a call to withHookResponse() before calling setup() so the webhook hook-response event can be subscribed to.
+
+### Webhook Configuration
+
+In addition to your normal webhook configuration you must set the **Response Topic** in the **Advanced Settings** to the following. Just copy and paste this as-is:
+
+```
+/hook-response/{{{PARTICLE_DEVICE_ID}}}/{{{PARTICLE_EVENT_NAME}}}
+```
+
+The parts in {{{ }}} will automatically be filled in with the appropriate device ID (of the sending device) and event name that triggered the event when the webhook is processed.
+
+### Firmware
+
+The firmware example in example/4-hook-response is the full code, however the important part is:
+
+```cpp
+void setup() {
+    publishQueue.withHookResponse("testHookResponse");
+	publishQueue.setup();
+}
+```
+
+The parameter to `withHookResponse()` is the event prefix for the event you are sending.
+
+
 ## Test Suite
 
 The example 03-test-suite makes it easy to test some of the features. Flag the code to a Photon or Electron and send a function to it to make it do things:
@@ -270,7 +305,7 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ### 0.1.3 (2019-11-21)
 
-- Added getNumEvent() method so you can know if the queue is empty or not
+- Added getNumEvents() method so you can know if the queue is empty or not
 
 ### 0.1.2 (2019-11-18)
 
@@ -303,3 +338,7 @@ but the mutex can never clear because of the SINGLE_THREADED_BLOCK.
 ### 0.1.0
 
 - Added support for other storage methods
+
+### 0.2.0
+
+- Added support for webhook response checks
