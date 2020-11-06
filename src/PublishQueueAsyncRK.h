@@ -833,7 +833,7 @@ protected:
 #endif /* __MB85RC256V_FRAM_RK */
 
 
-#if defined(__SPIFFSPARTICLERK_H) || defined(SdFat_h) || defined(DOXYGEN_BUILD)
+#if defined(__SPIFFSPARTICLERK_H) || defined(SdFat_h) || defined(DOXYGEN_BUILD) || defined(HAL_PLATFORM_FILESYSTEM)
 #ifndef PUBLISH_QUEUE_USE_FS
 #define PUBLISH_QUEUE_USE_FS
 #endif
@@ -1009,15 +1009,15 @@ public:
 
 			if (len < sizeof(PublishQueueHeader) || readBytes(0, (uint8_t *)&header, sizeof(PublishQueueHeader)) != sizeof(PublishQueueHeader)) {
 				initBuffer = true;
-				// pubqLogger.info("no data in events file, will generate new");
+				pubqLogger.info("no data in events file, will generate new");
 			}
 
 			if (!initBuffer && header.magic == PUBLISH_QUEUE_HEADER_MAGIC) {
-				// pubqLogger.info("numEvents=%u numSent=%u", header.numEvents, header.size);
+				pubqLogger.trace("numEvents=%u numSent=%u", header.numEvents, header.size);
 				oldestPos = sizeof(PublishQueueHeader);
 
 				if (header.numEvents == header.size) {
-					// pubqLogger.info("all events have been sent, reinitializing");
+					pubqLogger.info("all events have been sent, reinitializing");
 					initBuffer = true;
 				}
 				else
@@ -1028,7 +1028,7 @@ public:
 						size_t next = skipEvent(addr, eventBuf);
 						if (addr == 0) {
 							// Overflowed buffer, must be corrupted
-							// pubqLogger.info("Overflowed buffer on initial read, reinitializing");
+							pubqLogger.info("Overflowed buffer on initial read, reinitializing");
 							initBuffer = true;
 							break;
 						}
@@ -1038,20 +1038,22 @@ public:
 						addr = next;
 					}
 					if (!initBuffer) {
-						// pubqLogger.info("file data looks valid oldestPos=%u", oldestPos);
-						truncate(oldestPos);
+						pubqLogger.info("file data looks valid oldestPos=%u", oldestPos);
 					}
 				}
 			}
 			else {
 				// Not valid
 				initBuffer = true;
-				// pubqLogger.info("No magic bytes or invalid length");
+				pubqLogger.info("No magic bytes or invalid length");
 			}
 
 			//initBuffer = true; // Uncomment to discard old data
 
 			if (initBuffer) {
+				// In case the file is reused, truncate to zero length before adding in the header
+				truncate(0);
+
 				// For file system queues, size is not the size in bytes, but the number of events that have already been sent!
 				header.magic = PUBLISH_QUEUE_HEADER_MAGIC;
 				header.size = 0;
@@ -1065,7 +1067,7 @@ public:
 				pubqLogger.info("initialized events file");
 			}
 			else {
-				pubqLogger.info("using events file with numEvents=%u oldestPos=%u", header.numEvents, oldestPos);
+				pubqLogger.info("using events file with size=%u numEvents=%u oldestPos=%u", header.size, header.numEvents, oldestPos);
 			}
 		}
 
@@ -1140,12 +1142,12 @@ public:
 
 			size_t next = skipEvent(oldestPos, publishBuf);
 			if (next == 0) {
-				// pubqLogger.info("getOldestEvent failed, oldestPos=%u, clearing events", oldestPos);
+				// pubqLogger.trace("getOldestEvent failed, oldestPos=%u, clearing events", oldestPos);
 				return NULL;
 			}
 
 			// skipEvent will leave the event in publishBuf, which we then return
-			//pubqLogger.trace("getOldestEvent found an event at oldestPos=%u, next=%u", oldestPos, next);
+			// pubqLogger.trace("getOldestEvent found an event at oldestPos=%u, next=%u", oldestPos, next);
 
 			oldestPos = next;
 
@@ -1213,7 +1215,7 @@ public:
 
 		size_t count = len - addr;
 		if (count == 0) {
-			// pubqLogger.info("skipEvent called with no more events at addr=%u", addr);
+			// pubqLogger.info("skipEvent called with no more events at len=%u addr=%u", len, addr);
 			return 0;
 		}
 
@@ -1526,6 +1528,137 @@ protected:
 	SdFile file;			//!< SdFat file object for the events file
 };
 #endif /* SdFat_h */
+
+#if HAL_PLATFORM_FILESYSTEM
+#include <fcntl.h>
+#include <sys/stat.h>
+
+/**
+ * @brief Concrete subclass for storing events on a Particle Gen 3 LittleFS POSIX file system
+ */
+class PublishQueueAsyncPOSIX : public PublishQueueAsyncFileSystem {
+public:
+	/**
+	 * @brief Store events on a SdFat file system
+	 *
+	 * @param filename The filename to store the events in
+	 */
+	PublishQueueAsyncPOSIX(const char *filename) : filename(filename) {
+	}
+
+	virtual ~PublishQueueAsyncPOSIX() {
+	}
+
+	/**
+	 * @brief Open the events file
+	 */
+	virtual bool openFile() {
+		fd = open(filename, O_RDWR | O_CREAT);
+
+		return (fd != -1);
+	}
+
+	/**
+	 * @brief Close the events file
+	 */
+	virtual bool closeFile() {
+		if (fd != -1) {
+			close(fd);
+			fd = -1;
+		}
+		return true;
+	}
+
+	/**
+	 * @brief Set file position
+	 */
+	virtual bool seek(int seekTo) {
+		if (seekTo >= 0) {
+			return lseek(fd, seekTo, SEEK_SET) >= 0;
+		}
+		else {
+			return lseek(fd, 0, SEEK_END) >= 0;
+		}
+	}
+
+	/**
+	 * @brief Read bytes from the file
+	 *
+	 * @param seekTo The file offset to seek to if >= 0. Must be <= file length. Or pass
+	 * -1 to seek to the end of the file to append.
+	 *
+	 * @param buffer Buffer to fill with data
+	 *
+	 * @param length Number of bytes to read. Can be > than the number of bytes in the file.
+	 *
+	 * @returns Number of bytes read. Returns 0 on error.
+	 */
+	virtual size_t readBytes(int seekTo, uint8_t *buffer, size_t length) {
+		if (!seek(seekTo)) {
+			pubqLogger.error("readBytes seek failed seekTo=%d", seekTo);
+			return 0;
+		}
+		int count = read(fd, buffer, length);
+		if (count > 0) {
+			return count;
+		}
+		else {
+			return 0;
+		}
+	}
+
+	/**
+	 * @brief Write bytes to the file
+	 *
+	 * @param seekTo The file offset to seek to if >= 0. Must be <= file length. Or pass
+	 * -1 to seek to the end of the file to append.
+	 *
+	 * @param buffer Buffer to write to the file
+	 *
+	 * @param length Number of bytes to write.
+	 */
+	virtual size_t writeBytes(int seekTo, const uint8_t *buffer, size_t length) {
+		if (!seek(seekTo)) {
+			pubqLogger.error("writeBytes seek failed seekTo=%d", seekTo);
+			return 0;
+		}
+		int count = write(fd, buffer, length);
+		if (count > 0) {
+			// pubqLogger.trace("writeBytes seekTo=%d count=%d length=%u", seekTo, count, length);
+			return count;
+		}
+		else {
+			pubqLogger.error("writeBytes failed count=%d length=%u", count, length);
+			return 0;
+		}
+	}
+
+	/**
+	 * @brief Get length of the file or a negative error code
+	 */
+	virtual int getLength() {
+		struct stat sb;
+
+		fstat(fd, &sb);
+		return sb.st_size;
+	}
+
+	/**
+	 * @brief Truncate a file to a specified length in bytes
+	 *
+	 */
+	virtual bool truncate(size_t size) {
+		// Note: This requires Device OS 2.0.0-rc.3 or later!
+		return ftruncate(fd, (s32_t)size) == 0;
+	}
+
+
+protected:
+	String filename;		//!< Filename for the events file (set in constructor)
+	int fd = -1;			//!< File descriptor for the events file
+};
+
+#endif /* HAL_PLATFORM_FILESYSTEM */
 
 
 #endif /* __PUBLISHQUEUEASYNCRK_H */

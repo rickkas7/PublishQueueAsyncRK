@@ -8,14 +8,13 @@
 SYSTEM_THREAD(ENABLED);
 
 SerialLogHandler logHandler(LOG_LEVEL_INFO, { // Logging level for non-application messages
-    { "app.spiffs", LOG_LEVEL_ERROR } // Logging level for SPIFFS messages
+    { "app.spiffs", LOG_LEVEL_ERROR }, // Logging level for SPIFFS messages
+	{ "app.pubq", LOG_LEVEL_TRACE }
 });
 
-// SpiFlashWinbond spiFlash(SPI, A4);	// Winbond flash on SPI (A pins on Gen 2, regular SCK/MOSI/MISO on Gen 3)
-
+SpiFlashWinbond spiFlash(SPI, A2);	// Winbond flash on SPI (A pins on Gen 2, regular SCK/MOSI/MISO on Gen 3)
 // SpiFlashISSI spiFlash(SPI, A2); 		// ISSI flash on SPI (A pins)
-
-SpiFlashP1 spiFlash;					// P1 external flash inside the P1 module
+// SpiFlashP1 spiFlash;					// P1 external flash inside the P1 module
 
 
 SpiffsParticle fs(spiFlash);
@@ -29,7 +28,8 @@ enum {
 	TEST_PUBLISH_OFFLINE, // 3 go offline, publish some events, then go back online, number is param0, optional size in param2
 	TEST_COUNTER_WITH_ACK, // 4 publish, period milliseconds is param0 but use WITH_ACK mode
 	TEST_PAUSE_PUBLISING, // 5 pause publishing
-	TEST_RESUME_PUBLISING // 6 resume publishing
+	TEST_RESUME_PUBLISING, // 6 resume publishing
+	TEST_PUBLISH_OFFLINE_RESET // 7 go offline, publish some events, reset device, number is param0, optional size in param2
 };
 
 // Example:
@@ -100,9 +100,7 @@ void loop() {
 		}
 	}
 	else
-	if (testNum == TEST_PUBLISH_OFFLINE) {
-		testNum = TEST_IDLE;
-
+	if (testNum == TEST_PUBLISH_OFFLINE || testNum == TEST_PUBLISH_OFFLINE_RESET) {
 		int count = intParam[0];
 		int size = intParam[1];
 
@@ -119,6 +117,14 @@ void loop() {
 		}
 
 		Log.info("after publishing numEvents=%d", publishQueue.getNumEvents());
+
+		if (testNum == TEST_PUBLISH_OFFLINE_RESET) {
+			Log.info("resetting device...");			
+			delay(100);
+			System.reset();
+		}
+
+		testNum = TEST_IDLE;
 
 		Log.info("Going to Particle.connect()...");
 		Particle.connect();
