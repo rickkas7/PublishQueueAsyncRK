@@ -268,6 +268,12 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.2.0 (2020-11-06)
+
+- Fixed a bug in all file-based implementations (Spiffs, SdFat) where events were not published after a reboot.
+- Added a new test suite function (7) to disconnect, post events to the queue, then reboot.
+- Added support for storing events on the POSIX file system on Gen 3 devices (Argon, Boron, Tracker SoM) in 2.0.0-rc.3 and later.
+
 ### 0.1.3 (2019-11-21)
 
 - Added getNumEvent() method so you can know if the queue is empty or not

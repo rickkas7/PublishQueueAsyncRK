@@ -20,7 +20,8 @@ enum {
 	TEST_PUBLISH_OFFLINE, // 3 go offline, publish some events, then go back online, number is param0, optional size in param2
 	TEST_COUNTER_WITH_ACK, // 4 publish, period milliseconds is param0 but use WITH_ACK mode
 	TEST_PAUSE_PUBLISING, // 5 pause publishing
-	TEST_RESUME_PUBLISING // 6 resume publishing
+	TEST_RESUME_PUBLISING, // 6 resume publishing
+	TEST_PUBLISH_OFFLINE_RESET // 7 go offline, publish some events, reset device, number is param0, optional size in param2
 };
 
 // Example:
@@ -84,9 +85,7 @@ void loop() {
 		}
 	}
 	else
-	if (testNum == TEST_PUBLISH_OFFLINE) {
-		testNum = TEST_IDLE;
-
+	if (testNum == TEST_PUBLISH_OFFLINE || testNum == TEST_PUBLISH_OFFLINE_RESET) {
 		int count = intParam[0];
 		int size = intParam[1];
 
@@ -103,6 +102,14 @@ void loop() {
 		}
 
 		Log.info("after publishing numEvents=%d", publishQueue.getNumEvents());
+
+		if (testNum == TEST_PUBLISH_OFFLINE_RESET) {
+			Log.info("resetting device...");			
+			delay(100);
+			System.reset();
+		}
+
+		testNum = TEST_IDLE;
 
 		Log.info("Going to Particle.connect()...");
 		Particle.connect();

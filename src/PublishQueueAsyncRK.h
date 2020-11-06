@@ -1009,15 +1009,15 @@ public:
 
 			if (len < sizeof(PublishQueueHeader) || readBytes(0, (uint8_t *)&header, sizeof(PublishQueueHeader)) != sizeof(PublishQueueHeader)) {
 				initBuffer = true;
-				// pubqLogger.info("no data in events file, will generate new");
+				pubqLogger.info("no data in events file, will generate new");
 			}
 
 			if (!initBuffer && header.magic == PUBLISH_QUEUE_HEADER_MAGIC) {
-				// pubqLogger.info("numEvents=%u numSent=%u", header.numEvents, header.size);
+				pubqLogger.trace("numEvents=%u numSent=%u", header.numEvents, header.size);
 				oldestPos = sizeof(PublishQueueHeader);
 
 				if (header.numEvents == header.size) {
-					// pubqLogger.info("all events have been sent, reinitializing");
+					pubqLogger.info("all events have been sent, reinitializing");
 					initBuffer = true;
 				}
 				else
@@ -1028,7 +1028,7 @@ public:
 						size_t next = skipEvent(addr, eventBuf);
 						if (addr == 0) {
 							// Overflowed buffer, must be corrupted
-							// pubqLogger.info("Overflowed buffer on initial read, reinitializing");
+							pubqLogger.info("Overflowed buffer on initial read, reinitializing");
 							initBuffer = true;
 							break;
 						}
@@ -1038,20 +1038,22 @@ public:
 						addr = next;
 					}
 					if (!initBuffer) {
-						// pubqLogger.info("file data looks valid oldestPos=%u", oldestPos);
-						truncate(oldestPos);
+						pubqLogger.info("file data looks valid oldestPos=%u", oldestPos);
 					}
 				}
 			}
 			else {
 				// Not valid
 				initBuffer = true;
-				// pubqLogger.info("No magic bytes or invalid length");
+				pubqLogger.info("No magic bytes or invalid length");
 			}
 
 			//initBuffer = true; // Uncomment to discard old data
 
 			if (initBuffer) {
+				// In case the file is reused, truncate to zero length before adding in the header
+				truncate(0);
+
 				// For file system queues, size is not the size in bytes, but the number of events that have already been sent!
 				header.magic = PUBLISH_QUEUE_HEADER_MAGIC;
 				header.size = 0;
@@ -1065,7 +1067,7 @@ public:
 				pubqLogger.info("initialized events file");
 			}
 			else {
-				pubqLogger.info("using events file with numEvents=%u oldestPos=%u", header.numEvents, oldestPos);
+				pubqLogger.info("using events file with size=%u numEvents=%u oldestPos=%u", header.size, header.numEvents, oldestPos);
 			}
 		}
 
@@ -1140,12 +1142,12 @@ public:
 
 			size_t next = skipEvent(oldestPos, publishBuf);
 			if (next == 0) {
-				// pubqLogger.info("getOldestEvent failed, oldestPos=%u, clearing events", oldestPos);
+				// pubqLogger.trace("getOldestEvent failed, oldestPos=%u, clearing events", oldestPos);
 				return NULL;
 			}
 
 			// skipEvent will leave the event in publishBuf, which we then return
-			//pubqLogger.trace("getOldestEvent found an event at oldestPos=%u, next=%u", oldestPos, next);
+			// pubqLogger.trace("getOldestEvent found an event at oldestPos=%u, next=%u", oldestPos, next);
 
 			oldestPos = next;
 
@@ -1213,7 +1215,7 @@ public:
 
 		size_t count = len - addr;
 		if (count == 0) {
-			// pubqLogger.info("skipEvent called with no more events at addr=%u", addr);
+			// pubqLogger.info("skipEvent called with no more events at len=%u addr=%u", len, addr);
 			return 0;
 		}
 
@@ -1572,10 +1574,10 @@ public:
 	 */
 	virtual bool seek(int seekTo) {
 		if (seekTo >= 0) {
-			return lseek(fd, SEEK_SET, seekTo);
+			return lseek(fd, seekTo, SEEK_SET) >= 0;
 		}
 		else {
-			return lseek(fd, SEEK_END, seekTo);
+			return lseek(fd, 0, SEEK_END) >= 0;
 		}
 	}
 
@@ -1622,9 +1624,11 @@ public:
 		}
 		int count = write(fd, buffer, length);
 		if (count > 0) {
+			// pubqLogger.trace("writeBytes seekTo=%d count=%d length=%u", seekTo, count, length);
 			return count;
 		}
 		else {
+			pubqLogger.error("writeBytes failed count=%d length=%u", count, length);
 			return 0;
 		}
 	}
@@ -1644,8 +1648,8 @@ public:
 	 *
 	 */
 	virtual bool truncate(size_t size) {
-		// TODO: This does not appear to be implemented in the POSIX wrapper and it's necessary.
-		return false; // truncate(fd, (s32_t)size) == SPIFFS_OK;
+		// Note: This requires Device OS 2.0.0-rc.3 or later!
+		return ftruncate(fd, (s32_t)size) == 0;
 	}
 
 
