@@ -30,6 +30,12 @@ Browsable API documentation for this library can be found [here](https://rickkas
 
 You'll need to add the PublishQueueAsyncRK library. It's in the community libraries and here on Github.
 
+You must use system threading mode with PublishQueueAsyncRK. It will most likely fail in unpredictable ways if not using threading.
+
+```
+SYSTEM_THREAD(ENABLED);
+```
+
 In your main source file, you'll need to allocate a retained buffer and initialize the object:
 
 ```
