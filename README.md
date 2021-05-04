@@ -26,11 +26,14 @@ Version 0.1.0 supports multiple back-end storage methods, including:
 
 Browsable API documentation for this library can be found [here](https://rickkas7.github.io/PublishQueueAsyncRK/).
 
+If you are using a Gen 3 devices (Argon, Boron, B Series SoM, or Tracker SoM), you may prefer to use [PublishQueuePosixRK](https://github.com/rickkas7/PublishQueuePosixRK) instead. It uses the flash file system on these devices to store events, and it's a much simpler architecture.
+
 ## Using it
 
 You'll need to add the PublishQueueAsyncRK library. It's in the community libraries and here on Github.
 
-You must use system threading mode with PublishQueueAsyncRK. It will most likely fail in unpredictable ways if not using threading.
+You must use system threading mode with PublishQueueAsyncRK. The library will no longer initialize 
+if you do not have threading enabled.
 
 ```
 SYSTEM_THREAD(ENABLED);
@@ -273,6 +276,11 @@ particle call electron3 test "3,5,64"
 Disconnect from the cloud, publish 5 events of 64 bytes each, then go back online.
 
 ## Version History
+
+### 0.2.1 (2021-05-04)
+
+- Added check to require SYSTEM_THREAD(ENABLED)
+- Information about PublishQueuePosixRK
 
 ### 0.2.0 (2020-11-06)
 

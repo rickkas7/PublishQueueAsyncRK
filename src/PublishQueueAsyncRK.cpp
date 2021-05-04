@@ -13,11 +13,18 @@ PublishQueueAsyncBase::~PublishQueueAsyncBase() {
 }
 
 void PublishQueueAsyncBase::setup() {
+
+	if (system_thread_get_state(nullptr) != spark::feature::ENABLED) {
+		pubqLogger.error("SYSTEM_THREAD(ENABLED) is required");
+		return;
+	}
+
 	haveSetup = true;
 
 	os_mutex_create(&mutex);
 
 	thread = new Thread("PublishQueueAsync", threadFunctionStatic, this, OS_THREAD_PRIORITY_DEFAULT, 2048);
+
 }
 
 void PublishQueueAsyncBase::mutexLock() const {
