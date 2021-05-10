@@ -277,6 +277,12 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.2.2 (2021-05-10)
+
+- Added trace messages to event addition and removal with retained memory
+- Fixed several problems with clearEvents
+- Added automated test suite
+
 ### 0.2.1 (2021-05-04)
 
 - Added check to require SYSTEM_THREAD(ENABLED)

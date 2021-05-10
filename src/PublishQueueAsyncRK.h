@@ -373,6 +373,11 @@ public:
 	virtual ~PublishQueueAsyncRetained();
 
 	/**
+	 * @brief You must call setup from global setup()
+	 */
+	virtual void setup();
+
+	/**
 	 * @brief Publish an event. All other overloads lead here.
 	 *
 	 * @param eventName The name of the event (63 character maximum).

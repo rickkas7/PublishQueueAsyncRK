@@ -1,0 +1,20 @@
+{
+  "name": "automated-test-runner",
+  "version": "0.0.1",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "rickkas7@rickkas7.com",
+  "contributors": [],
+  "license": "Apache Version 2.0",
+  "dependencies": {
+    "expect": "^26.6.2",
+    "particle-api-js": "^9.1.0",
+    "serialport": "^9.0.7"
+  },
+  "engines": {
+    "node": ">=12.14.0"
+  }
+}
