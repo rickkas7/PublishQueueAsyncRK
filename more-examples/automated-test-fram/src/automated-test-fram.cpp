@@ -1,4 +1,9 @@
+
 #include "Particle.h"
+
+// This must be included before PublishQueueAsyncRK.h to add in FRAM support
+#include "MB85RC256V-FRAM-RK.h"
+#include "PublishQueueAsyncRK.h"
 
 #include "AutomatedTest.h"
 
@@ -10,8 +15,9 @@ SerialLogHandler logHandler(LOG_LEVEL_INFO, { // Logging level for non-applicati
 });
 
 
-retained uint8_t publishQueueRetainedBuffer[2048];
-PublishQueueAsync publishQueue(publishQueueRetainedBuffer, sizeof(publishQueueRetainedBuffer));
+MB85RC256V fram(Wire, 0);
+
+PublishQueueAsyncFRAM publishQueue(fram, 0, 4096); // Use first 4K of FRAM for event queue
 
 
 AutomatedTest automatedTest;
@@ -21,6 +27,8 @@ void setup() {
 
     waitFor(Serial.isConnected, 8000);
     delay(1000);
+
+	fram.begin();
 
 	publishQueue.setup();
 
@@ -32,3 +40,5 @@ void loop() {
 
     automatedTest.loop();
 }
+
+

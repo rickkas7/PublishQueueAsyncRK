@@ -35,6 +35,17 @@ void PublishQueueAsyncBase::mutexUnlock() const {
 	os_mutex_unlock(mutex);
 }
 
+void PublishQueueAsyncBase::logPublishQueueEventData(const void *data) const {
+	const PublishQueueEventData *eventDataStruct = (const PublishQueueEventData *)data;
+	const char *eventName = &((const char *)data)[sizeof(PublishQueueEventData)];
+	const char *eventData = eventName + strlen(eventName) + 1;
+
+	
+	pubqLogger.trace("ttl=%d flags=0x%2x size=%d eventName=%s", eventDataStruct->ttl, (int)eventDataStruct->flags, (int)eventDataStruct->size, eventName);
+	pubqLogger.trace("eventData=%s", eventData);
+}
+
+
 void PublishQueueAsyncBase::threadFunction() {
 	// Call the stateHandler forever
 	while(true) {
@@ -203,6 +214,7 @@ bool PublishQueueAsyncRetained::publishCommon(const char *eventName, const char 
 				PublishQueueEventData *eventData = reinterpret_cast<PublishQueueEventData *>(nextFree);
 				eventData->ttl = ttl;
 				eventData->flags = flags1.value() | flags2.value();
+				eventData->size = size;
 
 				char *cp = reinterpret_cast<char *>(nextFree);
 				cp += sizeof(PublishQueueEventData);

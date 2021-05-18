@@ -126,6 +126,10 @@ const SerialPort = require('serialport');
         let mon = {};
         mon.options = options;
 
+        if (options.msgCount) {
+            options.msgNum = 0;
+        }
+
         mon.checkLine = function(line) {
             const m = line.match(/([0-9]+) \[([^\]]+)\] ([A-Z]+): (.*)/);
             if (m && m.length >= 5) {
@@ -148,10 +152,20 @@ const SerialPort = require('serialport');
                     if (msg != options.msgIs) {
                         return false;
                     }
+                    if (options.msgCount) {
+                        if (options.msgNum++ < options.msgCount) {
+                            return false;
+                        }
+                    }
                 }                
                 if (options.msgIncludes) {
                     if (!msg.includes(options.msgIncludes)) {
                         return false;
+                    }
+                    if (options.msgCount) {
+                        if (options.msgNum++ < options.msgCount) {
+                            return false;
+                        }
                     }
                 }                
                 if (options.msgJson) {

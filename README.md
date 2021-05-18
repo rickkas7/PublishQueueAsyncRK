@@ -277,6 +277,12 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.2.3 (2021-05-18)
+
+- Added trace messages for debugging FRAM implementation
+- Optimized the way entries are read out of FRAM to not read way past the end of the actual data
+- Added automated test for FRAM
+
 ### 0.2.2 (2021-05-10)
 
 - Added trace messages to event addition and removal with retained memory

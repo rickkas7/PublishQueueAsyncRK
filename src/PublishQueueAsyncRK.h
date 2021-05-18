@@ -47,7 +47,7 @@ typedef struct { // 8 bytes
 	int ttl;					//!< Event TTL (not actually used by the cloud, but we can send it up if sent)
 	uint8_t flags;				//!< Event flags (like PRIVATE or WITH_ACK)
 	uint8_t reserved1;			//!< Not currently used (compiler will pad structure out to 8 bytes anyway)
-	uint16_t reserved2;			//!< Not currently used
+	uint16_t size;				//!< Size of entire structure, including eventName, eventData, and padding in 0.3.0 and later
 	// eventName (c-string, packed)
 	// eventData (c-string, packed)
 	// padded to 4-byte alignment
@@ -252,6 +252,11 @@ public:
 	 * @brief Unlock the mutex
 	 */
 	void mutexUnlock() const;
+
+	/**
+	 * @brief Log event data to the debug log
+	 */
+	void logPublishQueueEventData(const void *data) const;
 
 	/**
 	 * @brief Maximum size of PublishQueueEventData with strings (696 bytes)
@@ -548,12 +553,17 @@ public:
 
 			nextFree = start + sizeof(PublishQueueHeader);
 			for(uint16_t ii = 0; ii < header.numEvents; ii++) {
+				PublishQueueEventData *eventDataStruct = (PublishQueueEventData *)eventBuf;
 				nextFree = skipEvent(nextFree, eventBuf);
 				if (nextFree > (start + len)) {
 					// Overflowed buffer, must be corrupted
-					// pubqLogger.info("FRAM contents invalid, reinitializing");
+					pubqLogger.info("FRAM contents invalid, reinitializing");
 					initBuffer = true;
 					break;
+				}
+				if (eventDataStruct->size == 0) {
+					pubqLogger.info("FRAM has old data without size");
+					initBuffer = true;
 				}
 			}
 		}
@@ -613,11 +623,12 @@ public:
 
 				if ((start + len - nextFree) >= size) {
 					// There is room to fit this
-					// pubqLogger.info("writing event nextFree=%u size=%u", nextFree, size);
+					pubqLogger.info("writing event nextFree=%u size=%u", nextFree, size);
 
 					PublishQueueEventData *eventData = (PublishQueueEventData *)eventBuf;
 					eventData->ttl = ttl;
 					eventData->flags = flags1.value() | flags2.value();
+					eventData->size = size;
 
 					char *cp = (char *) eventBuf;
 					cp += sizeof(PublishQueueEventData);
@@ -629,11 +640,14 @@ public:
 
 					fram.writeData(nextFree, (uint8_t *)&eventBuf, size);
 
+					logPublishQueueEventData(&eventBuf);
+
 					nextFree += size;
 					header.numEvents++;
 					fram.writeData(start, (uint8_t *)&header, sizeof(PublishQueueHeader));
+					pubqLogger.trace("writing header start=%d size=%u", (int)start, sizeof(PublishQueueHeader));
 
-					// pubqLogger.info("after writing nextFree=%u numEvents=%u", nextFree, header.numEvents);
+					pubqLogger.trace("after saving numEvents=%d nextFree=%d end=%d", (int)header.numEvents, (int)(nextFree - start), len);
 
 					return true;
 				}
@@ -677,7 +691,7 @@ public:
 		skipEvent(addr, publishBuf);
 
 		// skipEvent will leave the event in publishBuf, which we then return
-		// pubqLogger.trace("getOldestEvent found an event");
+		pubqLogger.trace("getOldestEvent found an event addr=%u", addr);
 
 		return (PublishQueueEventData *)publishBuf;
 	}
@@ -693,6 +707,13 @@ public:
 		StMutexLock lock(this);
 		header.numEvents = 0;
 		fram.writeData(start, (uint8_t *)&header, sizeof(PublishQueueHeader));
+
+		nextFree = start + sizeof(PublishQueueHeader);
+		isSending = false;
+		lastPublish = 0;
+
+		pubqLogger.trace("clearEvents numEvents=%d size=%d", (int)header.numEvents, (int)header.size);
+
 		return true;
 	}
 
@@ -734,7 +755,7 @@ public:
 			ii++;
 		}
 
-		// pubqLogger.info("discardOldEvent secondEvent=%d prevAddr=%u addr=%u nextFree=%u", secondEvent, prevAddr, addr, nextFree); // TEMPORARY
+		pubqLogger.trace("discardOldestEvent secondEvent=%d addr=%d prevAddr=%d nextFree=%d", (int)secondEvent, (int)addr, (int)prevAddr, (int)nextFree);
 
 		if (nextFree > addr) {
 			// pubqLogger.info("moveData from %u to %u len=%u", addr, prevAddr, nextFree - addr);
@@ -745,7 +766,7 @@ public:
 		header.numEvents--;
 		fram.writeData(start, (uint8_t *)&header, sizeof(PublishQueueHeader));
 
-		// pubqLogger.info("after numEvents=%u nextFree=%u", header.numEvents, nextFree); // TEMPORARY
+		pubqLogger.trace("after discardOldestEvent numEvents=%d nextFree=%d", header.numEvents, (int)nextFree);
 
 		return true;
 	}
@@ -760,28 +781,30 @@ public:
 	 * @returns Address of the the next event
 	 */
 	size_t skipEvent(size_t addr, uint8_t *buf) {
-		// Read event at start
-		size_t count = (start + len) - addr;
-		if (count > EVENT_BUF_SIZE) {
-			count = EVENT_BUF_SIZE;
+		char bufName[16];
+		if (buf == eventBuf) {
+			strcpy(bufName, "event");
+		}
+		else if (buf == publishBuf) {
+			strcpy(bufName, "publish");
+		}
+		else {
+			snprintf(bufName, sizeof(bufName), "0x%x", (int)buf);
 		}
 
-		fram.readData(addr, buf, count);
+		pubqLogger.trace("skipEvent buf=%s addr=%u", bufName, addr);
 
-		// pubqLogger.info("skipEvent addr=%u ttl=%d flags=%02x", addr, ((PublishQueueEventData *)buf)->ttl, ((PublishQueueEventData *)buf)->flags);
+		PublishQueueEventData *eventDataStruct = (PublishQueueEventData *)buf;
 
-		size_t next = addr;
+		fram.readData(addr, buf, sizeof(PublishQueueEventData));
 
-		next += sizeof(PublishQueueEventData);
-		next += strlen((const char *)&buf[next - addr]) + 1;
-		next += strlen((const char *)&buf[next - addr]) + 1;
+		fram.readData(addr + sizeof(PublishQueueEventData), &buf[sizeof(PublishQueueEventData)], eventDataStruct->size);
+		
+		logPublishQueueEventData(buf);
 
-		// Align
-		if ((next % 4) != 0) {
-			next += 4 - (next % 4);
-		}
+		size_t next = addr + eventDataStruct->size;
 
-		// pubqLogger.trace("skipEvent addr=%u next=%u", addr, next);
+		pubqLogger.trace("skipEvent addr=%u next=%u", addr, next);
 
 		return next;
 	}
@@ -1107,6 +1130,7 @@ public:
 		PublishQueueEventData *eventData = (PublishQueueEventData *)eventBuf;
 		eventData->ttl = ttl;
 		eventData->flags = flags1.value() | flags2.value();
+		eventData->size = size;
 
 		char *cp = (char *) eventBuf;
 		cp += sizeof(PublishQueueEventData);

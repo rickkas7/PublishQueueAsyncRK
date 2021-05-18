@@ -30,6 +30,11 @@ const expect = require('expect');
                     nameIs:'testEvent',
                     timeout:120000
                 });
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:1})) {
+                    throw 'missing published successfully';
+                }
+
             },
             'simple 2':async function(testName) {
                 await testSuite.serialMonitor.command('queue -c');
@@ -46,6 +51,10 @@ const expect = require('expect');
                 if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', historyOnly:true})) {
                     throw 'missing published successfully';
                 }
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:2})) {
+                    throw 'missing published successfully';
+                }
                 
             },
             'simple 10':async function(testName) { // 1
@@ -59,7 +68,11 @@ const expect = require('expect');
                     nameIs:'testEvent',
                     timeout:30000
                 });
-    
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:10})) {
+                    throw 'missing published successfully';
+                }
+
             },
             '622 byte 3':async function(testName) { 
                 const size = 622;
@@ -76,6 +89,9 @@ const expect = require('expect');
                     timeout:30000
                 });
     
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:3})) {
+                    throw 'missing published successfully';
+                }
             },
             '622 byte discard 3':async function(testName) { 
                 await testSuite.serialMonitor.command('queue -c');
@@ -94,6 +110,9 @@ const expect = require('expect');
                     timeout:30000
                 });
     
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:3})) {
+                    throw 'missing published successfully';
+                }
             },
             'offline 5':async function(testName) { // 2
                 // Offline, 5 events, then online
@@ -109,8 +128,12 @@ const expect = require('expect');
                     start:counter,
                     num:5,
                     nameIs:'testEvent',
-                    timeout:15000
+                    timeout:30000
                 });
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:5})) {
+                    throw 'missing published successfully';
+                }
 
             },
             'offline 5 reset':async function(testName) { // 3
@@ -136,6 +159,9 @@ const expect = require('expect');
                     nameIs:'testEvent',
                     timeout:30000
                 });
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:5})) {
+                    throw 'missing published successfully';
+                }
 
             },
             'publish slowly':async function(testName) { // 6
@@ -150,6 +176,10 @@ const expect = require('expect');
                     nameIs:'testEvent',
                     timeout:20000
                 });
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:10})) {
+                    throw 'missing published successfully';
+                }
 
             },            
             'data loss':async function(testName) {
@@ -186,6 +216,10 @@ const expect = require('expect');
                     nameIs:'testEvent',
                     timeout:45000                    
                 });
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:1})) {
+                    throw 'missing published successfully';
+                }
 
             },
 
@@ -226,6 +260,10 @@ const expect = require('expect');
                     timeout:45000                    
                 });
 
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:1})) {
+                    throw 'missing published successfully';
+                }
+
             },
 
 
@@ -264,6 +302,10 @@ const expect = require('expect');
                     timeout:45000                    
                 });
 
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:2})) {
+                    throw 'missing published successfully';
+                }
+
             },
 
 
@@ -298,6 +340,10 @@ const expect = require('expect');
                     timeout:30000                    
                 });
 
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:3})) {
+                    throw 'missing published successfully';
+                }
+
             },
 
 
@@ -323,6 +369,10 @@ const expect = require('expect');
                     nameIs:'testEvent',
                     timeout:300000                    
                 });
+
+                if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:10})) {
+                    throw 'missing published successfully';
+                }
 
             },
             'continuous events':async function(testName) { // 7
@@ -353,7 +403,11 @@ const expect = require('expect');
                             num:3,
                             nameIs:'testEvent'
                         });
-                        
+
+                        if (!testSuite.serialMonitor.monitor({msgIs:'published successfully', msgCount:3})) {
+                            throw 'missing published successfully';
+                        }
+                            
                         counter += 3;
                         console.log('publish 3 events complete counter=' + counter);
                     }, 15000);              
