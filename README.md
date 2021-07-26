@@ -277,6 +277,10 @@ Disconnect from the cloud, publish 5 events of 64 bytes each, then go back onlin
 
 ## Version History
 
+### 0.2.5 (2021-07-26)
+
+- Use particle::protocol::MAX_EVENT_DATA_LENGTH instead of 623 as the maximum publish size.
+
 ### 0.2.4 (2021-06-18)
 
 - Removed test files from Particle library upload

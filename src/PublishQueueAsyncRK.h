@@ -269,7 +269,7 @@ public:
 	 * Note: This size is not used for the retained memory subclass, but since it's used by
 	 * multiple other subclasses, it's included here.
 	 */
-	static const size_t EVENT_BUF_SIZE = sizeof(PublishQueueEventData) + 65 + 623;
+	static const size_t EVENT_BUF_SIZE = sizeof(PublishQueueEventData) + 65 + particle::protocol::MAX_EVENT_DATA_LENGTH;
 
 protected:
 	/**
