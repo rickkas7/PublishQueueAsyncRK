@@ -2,6 +2,9 @@
 
 *A library for asynchronous Particle.publish*
 
+If you are using a Particle Gen 3 device (Argon, Boron, B Series SoM, Tracker One, Tracker SoM, E404X) or a P2, I highly recommend using the [PublishQueuePosixRK](https://github.com/rickkas7/PublishQueuePosixRK) library instead. That library has a better internal design that is simpler, less likely to have bugs, and is better tested. Since Gen 2 devices are deprecated and no longer supported by current versions of Device OS, there will be limited maintenance of this library going forward.
+
+
 This library is designed for fire-and-forget publishing of events. It allows you to publish, even when not connected to the cloud, and the events are saved until connected. It also buffers events so you can call it a bunch of times rapidly and the events are metered out one per second to stay within the publish limits.
 
 Also, it's entirely non-blocking. The publishing occurs from a separate thread so the loop is never blocked. 
